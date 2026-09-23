@@ -9,14 +9,16 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Actions are pinned to exact versions: setup-uv stopped publishing floating
+# major tags after v7, and exact pins match how the rest of this repo is pinned.
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v10
+        uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
 
