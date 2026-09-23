@@ -173,6 +173,60 @@ Two caveats worth knowing:
 
 Set `LAYA_DEVICE=cpu` to force CPU for any target (e.g. `LAYA_DEVICE=cpu make s4`).
 
+### Running it on a CPU-only server
+
+No GPU is required. Measured here with `torch.set_num_threads(4)` to approximate a 4-vCPU box,
+one checkpoint per process, CPU only:
+
+| checkpoint | peak process RSS | 1 question | 5 questions | per question |
+|---|---:|---:|---:|---:|
+| `english` (ModernBERT-large, 421M) | ~3.0 GB | 165 ms | 642 ms | 128 ms |
+| `multilingual` (mmBERT-base, 322M) | ~3.0 GB | **75 ms** | **304 ms** | **61 ms** |
+
+**On CPU, prefer `multilingual` even for English-only work.** It is a smaller encoder, so it is
+roughly **2× faster** and holds fewer weights — at the cost of English accuracy (upstream measures
+0.657 vs 0.783 on MASSIVE intent). That trade is usually worth it on a CPU box.
+
+Sizing, for something like an 8 GB droplet:
+
+| | |
+|---|---|
+| checkpoints on disk | **2.37 GB** for all three (843 + 644 + 843 MB of weights plus tokenizers) |
+| RAM, one checkpoint resident | ~3 GB peak |
+| RAM, two checkpoints | ~5–6 GB — fits, with little headroom |
+| RAM, all three | **don't**, not on 8 GB |
+
+So 4 cores / 8 GB is comfortable for **one** checkpoint, workable for two.
+
+Two things that matter much more on a small server than on a laptop:
+
+**1. Do not install the CUDA build of torch.** On Linux, `torch` from PyPI drags in 43
+`nvidia-*` packages — gigabytes of CUDA libraries that a CPU-only droplet can never use. Point
+torch at the CPU index for Linux and they disappear (verified: 55 packages → 37, 43 nvidia → 0):
+
+```toml
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+```
+
+This is deliberately **not** the default here, because it would force CPU wheels on GPU servers
+too. Add it to `pyproject.toml` when you deploy to a CPU-only host.
+
+**2. Preload at boot, never lazily per request.** A stock `laya.load()` costs 20–40 s *and*
+allocates 1.7 GB of throwaway random initialisation — real memory pressure on an 8 GB box. Use
+`Router(preload=True, max_loaded=1)` at startup, or the meta-device loader in
+`scenarios/_common.py`. Also set `torch.set_num_threads(<your core count>)`.
+
+A caveat on the numbers above: they were taken on an M4 Max's CPU cores, which are considerably
+faster than a shared-vCPU cloud instance. Expect roughly **2–3× slower** on a basic droplet —
+call it ~150–200 ms per question on `multilingual`, ~400 ms on `english`. Benchmark on the actual
+instance before committing to a latency budget; `make s4` gives you that curve.
+
 ### Footprint
 
 | | |
