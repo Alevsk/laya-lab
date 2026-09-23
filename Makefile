@@ -12,7 +12,7 @@ export HF_HUB_OFFLINE ?= 1
 export TOKENIZERS_PARALLELISM ?= false
 
 .PHONY: help upstream setup warm doctor test test-fast verify-loader link-models clean distclean \
-        lint gpu-check scenarios demo quick demo-quick verify s1 s2 s3 s4 s5 s6 \
+        lint gpu-check scenarios demo quick demo-quick verify s1 s2 s3 s4 s5 s6 s7 tetris \
         routing guard confidence throughput limits-language limits-footguns
 
 help: ## Show this help
@@ -64,6 +64,7 @@ S3 := scenarios/03_confidence_gate.py
 S4 := scenarios/04_throughput.py
 S5 := scenarios/05_language_limit.py
 S6 := scenarios/06_silent_footguns.py
+S7 := scenarios/07_tetris_arena.py
 
 s1 routing: ## Scenario 1 - routing is free: 19 inputs in 10 languages, zero models loaded (~10 s)
 	@$(PY) $(S1)
@@ -83,8 +84,11 @@ s5 limits-language: ## Scenario 5 - the limit: where the router is blind, and wh
 s6 limits-footguns: ## Scenario 6 - four ways your input is destroyed with no error at all (~8 s)
 	@$(PY) $(S6)
 
-scenarios demo: ## Run all six scenarios in order (~70 s); stops at the first broken claim
-	@$(PY) $(S1) && $(PY) $(S2) && $(PY) $(S3) && $(PY) $(S4) && $(PY) $(S5) && $(PY) $(S6)
+s7 tetris: ## Scenario 7 - Tetris arena: latency budget vs decision quality (~30 s)
+	@$(PY) $(S7)
+
+scenarios demo: ## Run all seven scenarios in order (~100 s); stops at the first broken claim
+	@$(PY) $(S1) && $(PY) $(S2) && $(PY) $(S3) && $(PY) $(S4) && $(PY) $(S5) && $(PY) $(S6) && $(PY) $(S7)
 	@echo ""
 	@echo "  All scenarios passed. Raw numbers are in out/."
 

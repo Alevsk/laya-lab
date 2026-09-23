@@ -269,9 +269,9 @@ than being skipped.
 
 ## Scenarios
 
-Six scenarios, each a standalone script that prints a readable report, writes its raw numbers to
+Seven scenarios, each a standalone script that prints a readable report, writes its raw numbers to
 `out/<name>.json`, and **exits non-zero if its core claim stops holding** — so they double as
-regression tests. `make scenarios` runs all six in about 40 seconds on this machine.
+regression tests. `make scenarios` runs all seven in about 100 seconds on this machine.
 
 | target | scenario | what you learn |
 |---|---|---|
@@ -281,6 +281,7 @@ regression tests. `make scenarios` runs all six in about 40 seconds on this mach
 | `make s4` / `throughput` | batching economics | what asking 20 questions instead of 1 actually costs |
 | `make s5` / `limits-language` | language limit | where routing is blind, and the price of a mis-route |
 | `make s6` / `limits-footguns` | silent footguns | four ways your input is destroyed without an error |
+| `make s7` / `tetris` | Tetris arena | latency budget vs decision quality — two different things |
 
 ### 1 — Routing table (`make s1`, ~10 s, no checkpoints)
 
@@ -383,6 +384,53 @@ Four behaviours that destroy or ignore your input with **no exception, warning o
    saturates a float32 softmax.
 
 Each block ends with the guard to add instead.
+
+### 7 — Tetris arena (`make s7`, ~30 s, english)
+
+A [viral demo](https://x.com/atomic_chat_hq/status/2102160983409955244) put two Tetris boards side
+by side — a cloud decision model at 316–326 ms against Laya locally at 45–51 ms — and the cloud
+board filled up under **"GAME OVER — COULD NOT KEEP UP"**. This scenario reproduces that, and then
+asks the question the demo doesn't.
+
+It ships a real Tetris engine (7 pieces, all rotations, collision, multi-line clears, top-out,
+seeded 7-bag so every decider faces a byte-identical sequence) with 8 in-file self-tests. Four
+deciders choose from the **same** candidate placements, shuffled per decision with a shared seed
+so any index bias is positional rather than a board preference.
+
+**The demo's claim reproduces cleanly.** At a 110 ms tick derived from this run's own measured
+latency, `laya-local` met **24/24** ticks while a *simulated* 300 ms round trip met **0/11** and
+topped out. Both boards ran the identical decision procedure on identical pieces — the cloud
+board's answers simply arrived after the tick had passed.
+
+**And then the other half.** With latency removed entirely, over 11 paired seeds × 80 pieces:
+
+| decider | lines cleared | pieces survived | cost per decision |
+|---|---:|---:|---|
+| heuristic (4-term linear score) | **7.6** | 59.4 | ~6 µs |
+| laya-numeric | 0.3 | 28.5 | ~35 ms |
+| random | 0.1 | 26.6 | ~0 |
+| laya-semantic | 0.0 | 25.6 | ~35 ms |
+
+Laya does not measurably beat a uniform random pick (exact paired permutation test, **p = 0.62**
+on lines), while the heuristic clears the same bar at p = 0.001 — so the test isn't simply blind.
+
+**The framing experiment.** Laya has no numeric grounding but was trained on semantic typed
+decisions, so the same candidates were rendered twice: numerically (`"col 3 rot 1: clears 0,
+holes +2, height 7"`) and qualitatively (`"clears two rows and leaves the surface flat with no new
+gaps"`). Words did not rescue it — but the two framings **fail differently**. `laya-numeric`
+collapses onto option slot 0 on **83%** of decisions (4.5× uniform, using only 5 of 8 slots);
+`laya-semantic` spreads across all 8 with its mode at 33%, and still clears zero lines. A diverse
+output distribution is not evidence of judgement.
+
+The scenario's invariant table marks every row `measured` or `by construction` — the latter are
+arithmetic consequences of simulating the cloud as +300 ms, kept as regression guards and
+explicitly **not** offered as evidence.
+
+Two honest limits it prints itself: the 8-candidate cap that Laya's 192-token option budget forces
+also costs the heuristic most of its strength (27.4 lines unconstrained vs 7.6 here), so nobody in
+the file plays at full strength; and the 300 ms is an assumption from the demo's own report, not a
+measurement of any service. If the machine is too busy to establish the latency window, the
+scenario exits **2** (inconclusive) rather than 1, so a loaded laptop doesn't read as a false claim.
 
 ---
 
