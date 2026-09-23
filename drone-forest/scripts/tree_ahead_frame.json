@@ -1,0 +1,13 @@
+{"engine":"laya","frame":{"frame_id":1,"t":0.1,"drone":{"position":{"x":0,"y":8,"z":0},"velocity":{"x":0,"y":0,"z":-12},"heading_deg":0,"altitude":8,"speed":12},
+ "rays":[{"name":"forward","bearing_deg":0,"elevation_deg":0,"distance":6,"hit":"tree","max_range":60},
+ {"name":"left_15","bearing_deg":-15,"elevation_deg":0,"distance":60,"hit":null,"max_range":60},
+ {"name":"right_15","bearing_deg":15,"elevation_deg":0,"distance":9,"hit":"tree","max_range":60},
+ {"name":"left_30","bearing_deg":-30,"elevation_deg":0,"distance":60,"hit":null,"max_range":60},
+ {"name":"right_30","bearing_deg":30,"elevation_deg":0,"distance":12,"hit":"rock","max_range":60},
+ {"name":"left_45","bearing_deg":-45,"elevation_deg":0,"distance":60,"hit":null,"max_range":60},
+ {"name":"right_45","bearing_deg":45,"elevation_deg":0,"distance":60,"hit":null,"max_range":60},
+ {"name":"left_60","bearing_deg":-60,"elevation_deg":0,"distance":60,"hit":null,"max_range":60},
+ {"name":"right_60","bearing_deg":60,"elevation_deg":0,"distance":60,"hit":null,"max_range":60},
+ {"name":"up","bearing_deg":0,"elevation_deg":35,"distance":60,"hit":null,"max_range":60},
+ {"name":"down","bearing_deg":0,"elevation_deg":-35,"distance":14,"hit":"ground","max_range":60}],
+ "nearest":{"kind":"tree","distance":6,"bearing_deg":0,"elevation_deg":0,"closing_speed":12},"bounds":{"altitude_min":2,"altitude_max":40},"last_action":"forward"}}

@@ -1,0 +1,51 @@
+[project]
+name = "drone-forest"
+version = "0.1.0"
+description = "A 3D drone-through-a-forest simulator whose flight decisions come from a pluggable engine — Laya, a geometric heuristic, or random — served by a small WebSocket microservice"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "MIT" }
+dependencies = [
+    "laya",
+    "torch>=2.4",
+    "transformers>=4.48",
+    "safetensors>=0.4",
+    "huggingface_hub>=0.26",
+    "numpy>=1.26",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.7",
+    "websockets>=12",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.27",
+    "ruff>=0.6",
+]
+
+# Laya is not vendored: `make upstream` in the repo root clones it to ../upstream.
+[tool.uv.sources]
+laya = { path = "../upstream", editable = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4"]
+ignore = ["E501"]
+
+# Frozen wire/loader contracts are exempted rather than edited: `Action(str, Enum)` is kept on
+# purpose (StrEnum would change `str(Action.FORWARD)`), and fastload's in-function import order
+# is deliberate (torch before laya).
+[tool.ruff.lint.per-file-ignores]
+"server/schemas.py" = ["UP042"]
+"server/fastload.py" = ["I001"]

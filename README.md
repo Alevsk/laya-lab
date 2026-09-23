@@ -434,6 +434,27 @@ scenario exits **2** (inconclusive) rather than 1, so a loaded laptop doesn't re
 
 ---
 
+## Beyond benchmarks: the Drone Forest simulator
+
+[`drone-forest/`](drone-forest/README.md) is a separate application, not a scenario: a 3D
+Three.js game in which a quadcopter flies an endless forest of trees, rocks and wandering birds,
+and every flight decision comes from a pluggable engine behind a WebSocket microservice — Laya,
+a geometric heuristic, or random — on identical seeded worlds. It exists to test Laya in a
+closed loop rather than on a single prompt, and to generate the telemetry a fine-tune would
+train on.
+
+The honest headline, measured through the real game: **zero-shot Laya is a constant-action
+predictor in the forest** (`bank_left` on 450/450 decisions in one 45-second arena, with a flat
+positional-bias histogram, so it is a label preference and not slot bias), and given a frame
+with a tree 6 m dead ahead and the left clear for 60 m it picks *"forward: continue straight
+into a tree that is close"* at P = 0.996. The heuristic flew the same worlds with 1 collision in
+960 decisions. `make probe` in that folder reproduces the one-frame result in seconds.
+
+Obstacle kinds, obstacle behaviours (birds wander randomly today; an AI policy plugs in at the
+same seam) and decision engines are each one new module plus one registration line.
+
+---
+
 ## Notes, caveats and honest limits
 
 Everything below was reproduced on this machine against laya 0.3.6. These are not reasons to
