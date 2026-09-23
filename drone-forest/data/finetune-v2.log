@@ -1,8 +1,59 @@
-dataset: {'n': 14838, 'teacher_actions': {'forward': 11624, 'bank_left': 1399, 'bank_right': 1348, 'climb': 428, 'brake': 39}, 'source_engines': {'heuristic': 13016, 'laya': 924, 'random': 898}, 'files': 4}
-train  : {'n': 12118, 'teacher_actions': {'forward': 9501, 'bank_left': 1129, 'bank_right': 1080, 'climb': 369, 'brake': 39}, 'source_engines': {'heuristic': 10503, 'random': 818, 'laya': 797}, 'files': 4}
-val    : {'n': 2720, 'teacher_actions': {'forward': 2123, 'bank_left': 270, 'bank_right': 268, 'climb': 59}, 'source_engines': {'heuristic': 2513, 'laya': 127, 'random': 80}, 'files': 3}
+dataset: {'n': 23602, 'teacher_actions': {'forward': 18561, 'bank_left': 2248, 'bank_right': 2183, 'climb': 565, 'brake': 45}, 'source_engines': {'heuristic': 20950, 'laya': 1719, 'random': 933}, 'files': 6}
+train  : {'n': 18802, 'teacher_actions': {'forward': 14750, 'bank_left': 1790, 'bank_right': 1718, 'climb': 499, 'brake': 45}, 'source_engines': {'heuristic': 16437, 'laya': 1512, 'random': 853}, 'files': 6}
+val    : {'n': 4800, 'teacher_actions': {'forward': 3811, 'bank_right': 465, 'bank_left': 458, 'climb': 66}, 'source_engines': {'heuristic': 4513, 'laya': 207, 'random': 80}, 'files': 4}
 device=mps trainable params=50.8M (encoder frozen except top 2)
-val BEFORE: {"n": 2720, "agree": 0.819485294117647, "danger_n": 597, "danger_agree": 0.5728643216080402, "danger_forward": 0.32998324958123953, "collision_acc": 0.34191176470588236, "urgency_acc": 0.03308823529411765, "speed_acc": 0.20220588235294118, "hist": {"forward": 2084, "bank_right": 296, "bank_left": 282, "climb": 29, "brake": 16, "descend": 13}}
-  epoch 1 step 25/1312 loss 1.565 lr 8.50e-05 157s
-  epoch 1 step 50/1312 loss 1.168 lr 9.62e-05 313s
-  epoch 1 step 75/1312 loss 1.078 lr 9.43e-05 474s
+val BEFORE: {"n": 4800, "agree": 0.82375, "danger_n": 989, "danger_agree": 0.5662285136501517, "danger_forward": 0.36703741152679475, "collision_acc": 0.3227083333333333, "urgency_acc": 0.033125, "speed_acc": 0.204375, "hist": {"forward": 3757, "bank_right": 495, "bank_left": 483, "climb": 36, "brake": 16, "descend": 13}}
+  epoch 1 step 25/2028 loss 1.531 lr 8.56e-05 114s
+  epoch 1 step 50/2028 loss 1.200 lr 9.75e-05 223s
+  epoch 1 step 75/2028 loss 1.081 lr 9.63e-05 331s
+  epoch 1 step 100/2028 loss 1.060 lr 9.51e-05 438s
+  epoch 1 step 125/2028 loss 1.013 lr 9.38e-05 538s
+  epoch 1 step 150/2028 loss 0.897 lr 9.26e-05 637s
+  epoch 1 step 175/2028 loss 0.856 lr 9.14e-05 740s
+  epoch 1 step 200/2028 loss 0.892 lr 9.01e-05 847s
+  epoch 1 step 225/2028 loss 0.835 lr 8.89e-05 944s
+  epoch 1 step 250/2028 loss 0.751 lr 8.77e-05 1041s
+  epoch 1 step 275/2028 loss 0.735 lr 8.64e-05 1137s
+  epoch 1 step 300/2028 loss 0.738 lr 8.52e-05 1234s
+  epoch 1 step 325/2028 loss 0.730 lr 8.40e-05 1332s
+  epoch 1 step 350/2028 loss 0.755 lr 8.27e-05 1430s
+  epoch 1 step 375/2028 loss 0.752 lr 8.15e-05 1528s
+  epoch 1 step 400/2028 loss 0.703 lr 8.03e-05 1625s
+  epoch 1 step 425/2028 loss 0.736 lr 7.90e-05 1728s
+  epoch 1 step 450/2028 loss 0.693 lr 7.78e-05 1824s
+  epoch 1 step 475/2028 loss 0.681 lr 7.66e-05 1922s
+  epoch 1 step 500/2028 loss 0.639 lr 7.53e-05 2017s
+val after epoch 1: {"n": 4800, "agree": 0.8227083333333334, "danger_n": 989, "danger_agree": 0.5662285136501517, "danger_forward": 0.3660262891809909, "collision_acc": 0.8864583333333333, "urgency_acc": 0.8116666666666666, "speed_acc": 0.8160416666666667, "hist": {"forward": 3751, "bank_right": 499, "bank_left": 486, "climb": 35, "brake": 16, "descend": 13}}
+  epoch 2 step 525/2028 loss 0.488 lr 7.41e-05 2913s
+  epoch 2 step 550/2028 loss 0.654 lr 7.29e-05 3004s
+  epoch 2 step 575/2028 loss 0.648 lr 7.16e-05 3099s
+  epoch 2 step 600/2028 loss 0.672 lr 7.04e-05 3192s
+  epoch 2 step 625/2028 loss 0.674 lr 6.92e-05 3287s
+  epoch 2 step 650/2028 loss 0.622 lr 6.79e-05 3386s
+  epoch 2 step 675/2028 loss 0.692 lr 6.67e-05 3490s
+  epoch 2 step 700/2028 loss 0.651 lr 6.55e-05 3583s
+  epoch 2 step 725/2028 loss 0.596 lr 6.43e-05 3673s
+  epoch 2 step 750/2028 loss 0.659 lr 6.30e-05 3764s
+  epoch 2 step 775/2028 loss 0.632 lr 6.18e-05 3858s
+  epoch 2 step 800/2028 loss 0.623 lr 6.06e-05 3957s
+  epoch 2 step 825/2028 loss 0.559 lr 5.93e-05 4050s
+  epoch 2 step 850/2028 loss 0.630 lr 5.81e-05 4139s
+  epoch 2 step 875/2028 loss 0.553 lr 5.69e-05 4228s
+  epoch 2 step 900/2028 loss 0.588 lr 5.56e-05 4317s
+  epoch 2 step 925/2028 loss 0.613 lr 5.44e-05 4411s
+  epoch 2 step 950/2028 loss 0.602 lr 5.32e-05 4500s
+  epoch 2 step 975/2028 loss 0.577 lr 5.19e-05 4589s
+  epoch 2 step 1000/2028 loss 0.542 lr 5.07e-05 4678s
+val after epoch 2: {"n": 4800, "agree": 0.8202083333333333, "danger_n": 989, "danger_agree": 0.6076845298281092, "danger_forward": 0.282103134479272, "collision_acc": 0.884375, "urgency_acc": 0.8427083333333333, "speed_acc": 0.7916666666666666, "hist": {"forward": 3615, "bank_left": 580, "bank_right": 563, "climb": 28, "descend": 7, "brake": 7}}
+  saved best -> /Users/alevsk/Development/laya/drone-forest/data/checkpoints/laya-drone-ft
+  epoch 3 step 1025/2028 loss 0.265 lr 4.95e-05 5586s
+  epoch 3 step 1050/2028 loss 0.536 lr 4.82e-05 5676s
+  epoch 3 step 1075/2028 loss 0.573 lr 4.70e-05 5767s
+  epoch 3 step 1100/2028 loss 0.620 lr 4.58e-05 5865s
+  epoch 3 step 1125/2028 loss 0.571 lr 4.45e-05 5961s
+  time box hit at step 1136; stopping
+val after epoch 3: {"n": 4800, "agree": 0.826875, "danger_n": 989, "danger_agree": 0.6076845298281092, "danger_forward": 0.28816986855409504, "collision_acc": 0.8660416666666667, "urgency_acc": 0.85375, "speed_acc": 0.8225, "hist": {"forward": 3653, "bank_left": 559, "bank_right": 546, "climb": 34, "descend": 5, "brake": 3}}
+  saved best -> /Users/alevsk/Development/laya/drone-forest/data/checkpoints/laya-drone-ft
+
+BEST val: {"n": 4800, "agree": 0.826875, "danger_n": 989, "danger_agree": 0.6076845298281092, "danger_forward": 0.28816986855409504, "collision_acc": 0.8660416666666667, "urgency_acc": 0.85375, "speed_acc": 0.8225, "hist": {"forward": 3653, "bank_left": 559, "bank_right": 546, "climb": 34, "descend": 5, "brake": 3}}
+BEFORE  : {"n": 4800, "agree": 0.82375, "danger_n": 989, "danger_agree": 0.5662285136501517, "danger_forward": 0.36703741152679475, "collision_acc": 0.3227083333333333, "urgency_acc": 0.033125, "speed_acc": 0.204375, "hist": {"forward": 3757, "bank_right": 495, "bank_left": 483, "climb": 36, "brake": 16, "descend": 13}}

@@ -83,7 +83,7 @@ export interface HudOptions {
   renderEveryMs?: number;
 }
 
-export const DEFAULT_ENGINE_OPTIONS = ['local', 'heuristic', 'laya', 'random'] as const;
+export const DEFAULT_ENGINE_OPTIONS = ['local', 'heuristic', 'laya', 'laya-ft', 'random'] as const;
 export const DEFAULT_KEYS: ReadonlyArray<readonly [string, string]> = [
   ['R', 'rays'],
   ['C', 'camera'],

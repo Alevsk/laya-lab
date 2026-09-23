@@ -286,6 +286,29 @@ than the quality arena because its ~110 ms answers arrive after the 100 ms slot 
 is applied late and the next slot is skipped, so it steers at ~5 Hz through a forest that was
 tuned for 10 Hz. That is the real-time cost of a 421M-parameter encoder, measured, not modelled.
 
+### Fine-tuned: `laya-ft` in the arena
+
+Same forests, same protocol (quality mode, 45 s, difficulty 3), the only change being the
+checkpoint. Zero-shot rows are from the section above.
+
+| engine | seed | distance | collisions | near-misses | actions | mean speed |
+|---|---:|---:|---:|---:|---|---:|
+| `laya` zero-shot | 7 | 546 m | 0 | 6 | bank_left 450 | 12.0 m/s* |
+| `laya` zero-shot | 3 | 557 m | 4 | 17 | bank_left 418, bank_right 32 | 12.0 m/s* |
+| `laya-ft` (v2) | 7 | 390 m | **1** | 4 | forward 99, bank_left 107, bank_right 232, climb 11, descend 1 | 8.7 m/s |
+| `laya-ft` (v2) | 3 | 447 m | **1** | 2 | forward 92, bank_left 215, bank_right 131, climb 11, descend 1 | 9.9 m/s |
+| heuristic | 7 | 543 m | 1 | 4 | forward 407, banks 41, climb 2 | 12.0 m/s* |
+| heuristic | 3 | 544 m | 0 | 3 | forward 405, banks 43, climb 2 | 12.0 m/s* |
+
+\* recorded before the speed policy existed (cruise 12 m/s); `laya-ft` chooses its own speed.
+
+What changed is the *shape* of the decisions, not yet the outcome. Zero-shot Laya was a
+constant-action predictor; v2 spreads its choices across forward, both banks and climb with a
+flat option-index histogram, so it is responding to the scene. It flies slowly (it picks low
+speed levels) and weaves, and its collision counts sit between zero-shot Laya and the
+heuristic on these two seeds — two seeds are a smoke test, not a benchmark. It is not yet an
+autonomous pilot; it is the first checkpoint whose behaviour depends on what the sensors say.
+
 ### The one-frame probe (reproduce it in ten seconds)
 
 With the service running (`make serve`), `make probe` posts a single hand-built frame — a tree
@@ -373,10 +396,27 @@ frames where it does *not* say forward):
 |---|---:|---:|
 | base `english`, zero-shot | 0.42 | 0.29 |
 | v1: head only, 2 epochs, 2.3k frames | 0.34 | 0.38 |
-| v2: top-2 encoder layers, 14k frames | *running* | *running* |
+| v2: top-2 encoder layers, 23.6k frames, 3 epochs | 0.42 | 0.27 |
 
 v1 made things worse — a frozen encoder plus a small stale dataset drifted toward `forward`.
-The honest state of this section is *in progress*; the pipeline is what is finished.
+
+v2 (top 2 encoder layers unfrozen, 23,602 frames across difficulty levels 3–5, ~114 minutes on
+the M4 Max) shows exactly where a supervised fine-tune bites and where it does not. On the
+held-out block split (4,800 frames, 989 of them danger frames):
+
+| question | base, zero-shot | v2 fine-tuned |
+|---|---:|---:|
+| collision imminent (yes/no) | 0.32 | **0.87** |
+| urgency (4 levels) | 0.03 | **0.85** |
+| speed (4 levels) | 0.20 | **0.82** |
+| move — agreement with the teacher on danger frames | 0.57 | **0.61** |
+| move — says `forward` on danger frames (lower is better) | 0.37 | **0.29** |
+
+The three *state-reading* questions go from chance to strong in under three epochs: the model
+learns to read the rendered scene. The *steering* question moves in the right direction but
+only modestly — it is a harder, multi-way decision that depends on relating six option texts to
+the sector words in the state, and 3 epochs of a partial unfreeze is not enough to close the gap
+to a heuristic that computes it exactly. The arena numbers below are the test that matters.
 
 ## Extending it
 

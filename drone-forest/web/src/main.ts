@@ -49,7 +49,7 @@ import { createWorld, DEFAULT_BOUNDS, type WorldBounds } from './world';
 
 // ---------------------------------------------------------------- configuration
 
-type EngineName = 'heuristic' | 'laya' | 'random' | 'local';
+type EngineName = 'heuristic' | 'laya' | 'laya-ft' | 'random' | 'local';
 type CorridorName = 'forest' | 'canyon' | 'open';
 
 interface RunConfig {
@@ -72,7 +72,7 @@ const CORRIDORS: Record<CorridorName, Partial<WorldBounds>> = {
   open: { half_width: 40 },
 };
 
-const ENGINES: readonly EngineName[] = ['heuristic', 'laya', 'random', 'local'];
+const ENGINES: readonly EngineName[] = ['heuristic', 'laya', 'laya-ft', 'random', 'local'];
 const FIXED_DT = 1 / 120;
 const MAX_FRAME_DT = 1 / 20;
 const RESET_DELAY_MS = 1200;
