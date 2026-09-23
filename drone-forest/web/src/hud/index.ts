@@ -24,6 +24,8 @@ export interface HudState {
   /** selector value (local | heuristic | laya | random); falls back to `engine` */
   requestedEngine?: string;
   connected?: boolean;
+  /** a status line about the engine source: loading, fallback in effect, etc. */
+  notice?: string | null;
   action: ActionName;
   lastDecision: Decision | null;
   stats: DecisionStats | ExtendedDecisionStats;
@@ -182,6 +184,9 @@ export function createHud(root: HTMLElement, opts: HudOptions = {}): Hud {
   const rErr = row(engine, 'last error');
   rErr.root.classList.add('bad');
   rErr.root.hidden = true;
+  const rNotice = row(engine, 'status');
+  rNotice.root.classList.add('warn');
+  rNotice.root.hidden = true;
   const runLine = el('div', 'muted', '');
   engine.append(runLine);
 
@@ -275,6 +280,8 @@ export function createHud(root: HTMLElement, opts: HudOptions = {}): Hud {
     rSkipped.v.textContent = `${s.loop.slots_skipped} / ${ext.timeouts ?? 0}`;
     rErr.root.hidden = !ext.last_error;
     rErr.v.textContent = ext.last_error ?? '';
+    rNotice.root.hidden = !s.notice;
+    rNotice.v.textContent = s.notice ?? '';
     const runBits: string[] = [];
     if (s.seed !== undefined) runBits.push(`seed ${s.seed}`);
     if (s.hz !== undefined) runBits.push(`${s.hz} Hz`);

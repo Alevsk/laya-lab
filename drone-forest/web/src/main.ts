@@ -125,6 +125,8 @@ export interface RunState {
   engine: string;
   requestedEngine: EngineName;
   connected: boolean;
+  /** how the current source came to be, when it is not what was asked for (or is still loading) */
+  notice: string | null;
   action: ActionName;
   lastDecision: Decision | null;
   stats: DecisionStats;
@@ -178,29 +180,67 @@ declare global {
  * service has sent `info` — the service warms the engine before that message, so waiting for
  * it means a 2-3 s Laya load never turns into blind flight (which would be unfair to Laya).
  */
-async function openSource(cfg: RunConfig, engine: EngineName): Promise<DecisionSource> {
-  if (engine !== 'local') {
-    let ready: () => void = () => {};
-    const info = new Promise<void>((resolve) => {
-      ready = resolve;
-    });
-    const remote = createRemoteSource(cfg.server, engine, {
-      onInfo: () => ready(),
-      onError: (message) => console.warn(`[drone-forest] service: ${message}`),
-    });
-    await remote.connect();
-    if (remote.stats().connected) {
-      const timeout = new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), ENGINE_READY_MS));
-      if ((await Promise.race([info.then(() => 'ready' as const), timeout])) === 'ready') return remote;
-      console.warn(`[drone-forest] engine ${engine} did not become ready in ${ENGINE_READY_MS} ms; using the local heuristic`);
-    } else {
-      console.warn(`[drone-forest] ${cfg.server} unreachable; using the local heuristic`);
-    }
-    remote.dispose();
+interface Opened {
+  source: DecisionSource;
+  /** what the engine panel should say about how this source came to be, or null when all is well */
+  notice: string | null;
+}
+
+/**
+ * Open the requested engine. A remote engine is adopted only once the service confirms it is
+ * loaded (`info`). If the service is unreachable, or the engine is not ready within
+ * ENGINE_READY_MS, the game flies on the built-in heuristic AND KEEPS THE REMOTE SOURCE ALIVE:
+ * its reconnect/backoff continues and `onLateReady` fires the moment the service answers, so a
+ * player who selected `laya` before starting the service gets `laya` without re-selecting.
+ */
+async function openSource(
+  cfg: RunConfig,
+  engine: EngineName,
+  onLateReady?: (remote: DecisionSource) => void,
+): Promise<Opened> {
+  if (engine === 'local') {
+    const local = createLocalHeuristicSource();
+    await local.connect();
+    return { source: local, notice: null };
   }
+  let ready: () => void = () => {};
+  let settled = false;   // the open-now-or-fall-back decision has been made
+  let adopted = false;
+  const info = new Promise<void>((resolve) => {
+    ready = resolve;
+  });
+  let remote: DecisionSource | null = null;
+  remote = createRemoteSource(cfg.server, engine, {
+    onInfo: () => {
+      ready();
+      // only a LATE `info` (after we already fell back) triggers adoption from here;
+      // an in-time one is adopted by the caller through the normal return path
+      if (settled && !adopted && remote && onLateReady) {
+        adopted = true;
+        onLateReady(remote);
+      }
+    },
+    onError: (message) => console.warn(`[drone-forest] service: ${message}`),
+  });
+  await remote.connect();
+  let notice: string;
+  if (remote.stats().connected) {
+    const timeout = new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), ENGINE_READY_MS));
+    const outcome = await Promise.race([info.then(() => 'ready' as const), timeout]);
+    settled = true;
+    if (outcome === 'ready') {
+      adopted = true;
+      return { source: remote, notice: null };
+    }
+    notice = `engine ${engine} did not become ready in ${ENGINE_READY_MS / 1000} s - flying on the built-in heuristic; it will switch over when the service answers`;
+  } else {
+    settled = true;
+    notice = `service unreachable at ${cfg.server} - start it with \`make serve\` (or \`make dev\`); flying on the built-in heuristic until it answers`;
+  }
+  console.warn(`[drone-forest] ${notice}`);
   const local = createLocalHeuristicSource();
   await local.connect();
-  return local;
+  return { source: local, notice };
 }
 
 // ---------------------------------------------------------------- main
@@ -237,8 +277,31 @@ async function main(): Promise<void> {
     ],
   });
 
-  let source = await openSource(cfg, cfg.engine);
-  hud.setEngine(cfg.engine);
+  let notice: string | null = null;
+  let generation = 0;
+  let requested: EngineName = cfg.engine;   // what the selector should show: the player's choice, or what actually flies after a fallback
+  let source: DecisionSource;
+  const adopt = (remote: DecisionSource, name: EngineName, gen: number): void => {
+    if (gen !== generation) {
+      remote.dispose(); // the player has switched again since this was opened
+      return;
+    }
+    const previous = source;
+    source = remote;
+    loop.setSource(remote);
+    requested = name;
+    hud.setEngine(name);
+    notice = null;
+    if (previous !== remote) previous.dispose();
+    scoreAndReset('manual');
+  };
+  const opening = ++generation;
+  notice = cfg.engine === 'local' ? null : `loading ${cfg.engine} - the first load takes a few seconds, longer if the GPU is busy`;
+  const opened = await openSource(cfg, cfg.engine, (remote) => adopt(remote, cfg.engine, opening));
+  source = opened.source;
+  notice = opened.notice;
+  requested = opened.notice ? 'local' : cfg.engine;
+  hud.setEngine(requested);
   hud.setDifficulty(difficulty);
   const loop = createDecisionLoop(source, 1000 / cfg.hz, { mode: cfg.arena?.mode ?? 'realtime' });
 
@@ -300,10 +363,21 @@ async function main(): Promise<void> {
 
   const switchEngine = async (name: string): Promise<void> => {
     if (!ENGINES.includes(name as EngineName)) return;
+    const gen = ++generation;
     const previous = source;
     event('engine_switch', { details: { from: previous.name, to: name } });
-    source = await openSource(cfg, name as EngineName);
+    notice = name === 'local' ? null : `loading ${name} - the first load takes a few seconds, longer if the GPU is busy`;
+    requested = name as EngineName;
     hud.setEngine(name);
+    const opened = await openSource(cfg, name as EngineName, (remote) => adopt(remote, name as EngineName, gen));
+    if (gen !== generation) {
+      opened.source.dispose(); // superseded by a later selection
+      return;
+    }
+    source = opened.source;
+    notice = opened.notice;
+    requested = opened.notice ? 'local' : (name as EngineName); // the selector shows what is actually flying
+    hud.setEngine(requested);
     loop.setSource(source);
     previous.dispose();
     scoreAndReset('manual');
@@ -311,8 +385,9 @@ async function main(): Promise<void> {
 
   const state = (): RunState => ({
     engine: source.name,
-    requestedEngine: cfg.engine,
+    requestedEngine: requested,
     connected: source.stats().connected,
+    notice,
     action: loop.current(),
     lastDecision: loop.last(),
     stats: source.stats(),

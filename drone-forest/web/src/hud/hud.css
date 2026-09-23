@@ -54,6 +54,8 @@
 }
 .hud .row .k { color: var(--hud-dim); }
 .hud .row .v { font-variant-numeric: tabular-nums; }
+.hud .row.warn { color: var(--hud-warn); white-space: normal; }
+.hud .row.warn .v { text-align: left; }
 .hud .flight .row { flex-direction: row-reverse; }
 
 .hud select {

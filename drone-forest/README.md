@@ -78,6 +78,13 @@ make clean
 Open `http://127.0.0.1:5173/?engine=heuristic&seed=7`. If the service is not running the game
 logs a warning and flies on the in-browser heuristic.
 
+Switching engines from the panel is confirmed by the service before it takes effect. The
+engine panel's **status** line tells you what is going on: *loading laya…* while a model warms
+up (a few seconds; longer if the GPU is busy), or *service unreachable — flying on the built-in
+heuristic* if nothing answers on `:8765`. In that second case the game keeps the connection
+attempt alive and **adopts the engine you selected automatically** the moment the service comes
+up — start it with `make serve` and watch the panel switch over.
+
 ### URL parameters
 
 | param | values | meaning |
