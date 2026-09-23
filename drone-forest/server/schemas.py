@@ -11,7 +11,10 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-PROTOCOL_VERSION = 1
+PROTOCOL_VERSION = 2
+
+SPEED_MIN = 4.0
+"""Metres per second: the slowest the drone will be asked to fly (a hover cannot progress)."""
 
 # The fixed ray fan every frame carries, in this order. Bearing is degrees left(-)/right(+)
 # of the drone's heading; elevation is degrees up(+)/down(-). The game casts exactly these.
@@ -87,6 +90,7 @@ class Nearest(BaseModel):
 class Bounds(BaseModel):
     altitude_min: float = 2.0
     altitude_max: float = 40.0
+    speed_max: float = Field(18.0, description="m/s; an engine's target_speed is clamped to [SPEED_MIN, speed_max]")
 
 
 class SensorFrame(BaseModel):
@@ -120,6 +124,7 @@ class Decision(BaseModel):
     probabilities: dict[str, float] | None = Field(None, description="Per-action, when the engine has them")
     collision_imminent: float | None = Field(None, description="P(collision soon), when the engine estimates it")
     urgency: float | None = Field(None, description="0..3 expected level, when the engine estimates it")
+    target_speed: float | None = Field(None, description="m/s the engine wants the drone to fly at, in [SPEED_MIN, bounds.speed_max]; None = keep cruise")
     reason: str = Field("", description="One line a human can read on the HUD")
     option_index: int | None = Field(None, description="Index of the chosen option as presented to the model, for positional-bias audits")
     option_order: list[str] | None = Field(None, description="Action order as presented to the model, when shuffled")

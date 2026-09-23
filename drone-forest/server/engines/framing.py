@@ -23,7 +23,7 @@ import random
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from ..schemas import Action, Ray, SensorFrame
+from ..schemas import SPEED_MIN, Action, Bounds, Ray, SensorFrame
 
 FramingKind = Literal["semantic", "numeric"]
 FRAMINGS: tuple[FramingKind, ...] = ("semantic", "numeric")
@@ -79,6 +79,13 @@ BOUND_MARGIN = 3.0
 MOVE_INSTRUCTION = "A drone is flying through a forest and must not crash. Which flight action is safest now?"
 COLLISION_INSTRUCTION = "Is the drone about to hit something if it keeps flying straight?"
 URGENCY_INSTRUCTION = "How urgently does the drone need to change course?"
+SPEED_INSTRUCTION = "How fast should the drone fly right now? Fly at full speed whenever the way ahead is open."
+SPEED_LEVELS: tuple[str, ...] = (
+    "crawl, something is very close ahead",
+    "slow, obstacles are near",
+    "fast, the way ahead is mostly open",
+    "full speed, the way ahead is wide open",
+)
 URGENCY_LEVELS: tuple[str, ...] = (
     "no danger, cruise on",
     "mild, adjust soon",
@@ -326,12 +333,26 @@ def move_question(options: list[RenderedOption]) -> dict[str, Any]:
 
 
 def build_questions(options: list[RenderedOption]) -> dict[str, dict[str, Any]]:
-    """The one predict() payload: move (choice), collision_imminent (noul), urgency (score)."""
+    """The one predict() payload: move (choice), collision_imminent (noul), urgency (score), speed (score)."""
     return {
         "move": move_question(options),
         "collision_imminent": {"type": "noul", "instructions": COLLISION_INSTRUCTION},
         "urgency": {"type": "score", "instructions": URGENCY_INSTRUCTION, "criteria": list(URGENCY_LEVELS)},
+        "speed": {"type": "score", "instructions": SPEED_INSTRUCTION, "criteria": list(SPEED_LEVELS)},
     }
+
+
+def speed_from_level(level: float, bounds: Bounds) -> float:
+    """Expected speed level (0..3) -> m/s in [SPEED_MIN, bounds.speed_max]. Level 3 is exactly max."""
+    frac = max(0.0, min(1.0, level / (len(SPEED_LEVELS) - 1)))
+    return round(SPEED_MIN + frac * (bounds.speed_max - SPEED_MIN), 2)
+
+
+def speed_level(target_speed: float, bounds: Bounds) -> int:
+    """m/s -> nearest speed level 0..3 (the inverse of speed_from_level; used for training labels)."""
+    span = max(1e-6, bounds.speed_max - SPEED_MIN)
+    frac = max(0.0, min(1.0, (target_speed - SPEED_MIN) / span))
+    return int(round(frac * (len(SPEED_LEVELS) - 1)))
 
 
 @dataclass(frozen=True)

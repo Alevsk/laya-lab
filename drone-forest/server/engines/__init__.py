@@ -11,7 +11,7 @@ import importlib
 
 from .base import ENGINES, DecisionEngine, available, create, register  # noqa: F401
 
-BUILTIN_MODULES = ("random_engine", "heuristic_engine", "laya_engine")
+BUILTIN_MODULES = ("random_engine", "heuristic_engine", "laya_engine", "laya_ft_engine")
 IMPORT_ERRORS: dict[str, str] = {}
 
 

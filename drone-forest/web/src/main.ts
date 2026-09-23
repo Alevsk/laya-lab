@@ -23,7 +23,8 @@
  *   arena=quality|realtime   run the benchmark instead of playing (see decision/arena.ts)
  *   server=<ws url>  decision microservice (default ws://127.0.0.1:8765/ws)
  * If the service is unreachable the game falls back to the local heuristic so it always runs.
- * Keys: C camera (chase / nose), R sensor rays on/off, Space reset, P pause.
+ * Keys: C camera (chase / nose), R sensor rays on/off, Space reset (arena: restart), P pause,
+ * H hide/show every panel, A hide/show the arena panel.
  *
  * `window.__droneForest` exposes live state and stats for automated verification (Playwright).
  */
@@ -57,7 +58,11 @@ interface RunConfig {
   corridor: CorridorName;
   seconds: number;
   server: string;
+  /** obstacle difficulty preset 1..5 */
+  difficulty: number;
   arena: ArenaParams | null;
+  /** last seed of a `seeds=A-B` chain, or null when not chaining */
+  seedsEnd: number | null;
 }
 
 const CORRIDORS: Record<CorridorName, Partial<WorldBounds>> = {
@@ -86,15 +91,31 @@ function readConfig(): RunConfig {
   const engine = q.get('engine') as EngineName | null;
   const corridor = q.get('corridor') as CorridorName | null;
   const arena = parseArenaParams(window.location.search);
+  const difficulty = Math.min(5, Math.max(1, Math.round(num('difficulty', 3))));
   return {
+    difficulty,
     engine: engine && ENGINES.includes(engine) ? engine : 'heuristic',
     seed: num('seed', 1) >>> 0,
     hz: Math.min(60, Math.max(1, num('hz', 10))),
     corridor: corridor && corridor in CORRIDORS ? corridor : 'forest',
     seconds: Math.max(0, num('seconds', 0)),
     server: q.get('server') ?? 'ws://127.0.0.1:8765/ws',
-    arena: arena ? { ...arena, engine: engine && ENGINES.includes(engine) ? engine : 'heuristic', seed: num('seed', 1) >>> 0 } : null,
+    arena: arena ? { ...arena, engine: engine && ENGINES.includes(engine) ? engine : 'heuristic', seed: num('seed', 1) >>> 0, difficulty } : null,
+    seedsEnd: parseSeedsEnd(q.get('seeds')),
   };
+}
+
+/**
+ * `seeds=100-115` chains arena runs: when a run finishes and `seed` is below the end of the
+ * range, the page reloads itself with `seed+1`. One navigation therefore collects a whole
+ * batch of runs — and, through the remote engine, a whole batch of teacher-labelled telemetry.
+ */
+function parseSeedsEnd(raw: string | null): number | null {
+  if (!raw) return null;
+  const m = /^(\d+)-(\d+)$/.exec(raw.trim());
+  if (!m) return null;
+  const end = Number(m[2]);
+  return Number.isFinite(end) ? end >>> 0 : null;
 }
 
 // ---------------------------------------------------------------- run state (what the HUD shows)
@@ -127,7 +148,10 @@ export interface RunState {
   seed: number;
   hz: number;
   arena: string;
-  seconds: number;
+  seconds: number;  /** obstacle difficulty preset 1..5 */
+  difficulty: number;
+  /** engine-recommended forward speed, m/s; null = cruise */
+  targetSpeed: number | null;
 }
 
 /** Debug handle for automated verification; see the module header. */
@@ -190,7 +214,8 @@ async function main(): Promise<void> {
   // One set of factories (shared GPU resources) for the whole session; a fresh rng per episode
   // so every episode — and every engine — flies the same forest.
   const factories = defaultFactories();
-  const newSpawner = () => createSpawner(createRng(cfg.seed), factories);
+  let difficulty = cfg.difficulty;
+  const newSpawner = () => createSpawner(createRng(cfg.seed), factories, { level: difficulty });
 
   const world = createWorld({ root: appRoot, seed: cfg.seed, spawner: newSpawner(), bounds });
   const drone = createDrone(world.scene);
@@ -205,11 +230,14 @@ async function main(): Promise<void> {
       ['R', 'rays'],
       ['Space', 'reset'],
       ['P', 'pause'],
+      ['H', 'panels'],
+      ['A', 'arena'],
     ],
   });
 
   let source = await openSource(cfg, cfg.engine);
   hud.setEngine(cfg.engine);
+  hud.setDifficulty(difficulty);
   const loop = createDecisionLoop(source, 1000 / cfg.hz, { mode: cfg.arena?.mode ?? 'realtime' });
 
   let frameId = 0;
@@ -307,6 +335,8 @@ async function main(): Promise<void> {
     hz: cfg.hz,
     arena: cfg.arena ? `arena:${cfg.arena.mode}` : cfg.corridor,
     seconds: cfg.arena?.seconds ?? cfg.seconds,
+    difficulty,
+    targetSpeed: drone.targetSpeed,
   });
 
   let resolveArena: (r: ArenaResult | null) => void = () => {};
@@ -333,12 +363,21 @@ async function main(): Promise<void> {
         rays.toggle();
         break;
       case 'Space':
-        if (cfg.arena) return;
         e.preventDefault();
+        if (cfg.arena) {
+          window.location.reload(); // an arena run is defined by its URL; restarting it is reloading it
+          return;
+        }
         scoreAndReset('manual');
         break;
       case 'KeyP':
         paused = !paused;
+        break;
+      case 'KeyH':
+        hud.togglePanels();
+        break;
+      case 'KeyA':
+        hud.toggleArena();
         break;
     }
   });
@@ -369,6 +408,7 @@ async function main(): Promise<void> {
       loop,
       intervalMs: 1000 / cfg.hz,
       render,
+      isPaused: () => paused,
       onFrame: (f) => {
         frameId = f.frame_id;
         simTime = f.t;
@@ -385,6 +425,13 @@ async function main(): Promise<void> {
     arenaResult = result;
     hud.showArena(result);
     resolveArena(result);
+    if (cfg.seedsEnd !== null && cfg.seed < cfg.seedsEnd) {
+      const next = new URLSearchParams(window.location.search);
+      next.set('seed', String(cfg.seed + 1));
+      console.log(`ARENA_CHAIN next seed ${cfg.seed + 1} of ${cfg.seedsEnd}`);
+      setTimeout(() => { window.location.search = next.toString(); }, 400);
+      return;
+    }
     // keep drawing the final state so the run stays inspectable
     const idle = (): void => {
       render();
@@ -400,6 +447,12 @@ async function main(): Promise<void> {
     void switchEngine(name);
   });
   hud.onReset(() => scoreAndReset('manual'));
+  hud.onDifficultyChange((level: number) => {
+    if (cfg.arena) return; // arena runs are fixed by their URL so results stay comparable
+    difficulty = level;
+    event('reset', { details: { reason: 'difficulty', difficulty: level } });
+    scoreAndReset('manual');
+  });
 
   const step = (h: number): void => {
     simTime += h;
@@ -427,6 +480,10 @@ async function main(): Promise<void> {
       loop.tick(frame);
       rays.update(frame);
       lastAction = loop.current();
+    }
+    {
+      const want = loop.last()?.target_speed ?? null;
+      if (want !== drone.targetSpeed) drone.setTargetSpeed(want);
     }
 
     if (cfg.seconds > 0 && simTime - episodeStart >= cfg.seconds) scoreAndReset('timeout');

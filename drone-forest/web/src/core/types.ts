@@ -10,7 +10,10 @@
  */
 import type * as THREE from 'three';
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
+
+/** m/s: the slowest an engine may ask the drone to fly. Mirrors server/schemas.py::SPEED_MIN. */
+export const SPEED_MIN = 4;
 
 // ---------------------------------------------------------------- actions & sensing
 
@@ -46,7 +49,7 @@ export interface Nearest {
   closing_speed: number;
 }
 
-export interface Bounds { altitude_min: number; altitude_max: number }
+export interface Bounds { altitude_min: number; altitude_max: number; /** m/s ceiling for an engine's target_speed */ speed_max: number }
 
 /** Everything the drone knows at one instant. Built by `sensors/`, consumed by a `DecisionSource`. */
 export interface SensorFrame {
@@ -71,6 +74,8 @@ export interface Decision {
   collision_imminent?: number | null;
   urgency?: number | null;
   reason?: string;
+  /** m/s the engine wants, in [SPEED_MIN, bounds.speed_max]; null/absent = keep cruise */
+  target_speed?: number | null;
   option_index?: number | null;
   option_order?: string[] | null;
 }

@@ -50,7 +50,7 @@ function run(seed: number): RunResult {
     dt: DT,
     scene: new THREE.Scene(),
     rng,
-    bounds: { altitude_min: 1, altitude_max: 30, half_width: HALF_WIDTH, corridor_length: 200 },
+    bounds: { altitude_min: 1, altitude_max: 30, speed_max: 18, half_width: HALF_WIDTH, corridor_length: 200 },
     drone: { position: new THREE.Vector3(0, 4, 0), velocity: new THREE.Vector3(), heading_deg: 0 },
   };
   const obstacles: Obstacle[] = [];

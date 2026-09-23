@@ -74,12 +74,18 @@ def fast_init():
 
 
 def load_agent(checkpoint: str = "english", device: str | None = None):
-    """`checkpoint` is 'english' | 'multilingual' | 'typed-decisions'."""
+    """`checkpoint` is 'english' | 'multilingual' | 'typed-decisions', or a local directory in
+    laya's layout (rl_agent_config.json, model.safetensors, tokenizer/, encoder/) - e.g. one
+    written by server/finetune.py."""
     import laya
 
-    sub = {"english": None, "multilingual": "multilingual", "typed-decisions": "typed-decisions"}[checkpoint]
+    if os.path.isdir(checkpoint):
+        repo, sub = checkpoint, None
+    else:
+        repo = "convaiinnovations/laya"
+        sub = {"english": None, "multilingual": "multilingual", "typed-decisions": "typed-decisions"}[checkpoint]
     try:
         with fast_init():
-            return laya.load("convaiinnovations/laya", subfolder=sub, device=device)
+            return laya.load(repo, subfolder=sub, device=device)
     except Exception:
-        return laya.load("convaiinnovations/laya", subfolder=sub, device=device)
+        return laya.load(repo, subfolder=sub, device=device)

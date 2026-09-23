@@ -87,6 +87,8 @@ logs a warning and flies on the in-browser heuristic.
 | `hz` | 1..60 (default 10) | decision cadence |
 | `corridor` | `forest` (default), `canyon`, `open` | corridor half-width 24 / 12 / 40 m |
 | `seconds` | number | play: episode length (0 = until a collision); arena: run length |
+| `difficulty` | 1..5 | obstacle preset: 1 sparse, 3 normal (default), 5 dense with a narrow wandering gap — see *Difficulty and speed* |
+| `seeds` | `A-B` | arena only: chain runs over seeds A..B, reloading with `seed+1` after each result — one URL collects a whole batch |
 | `arena` | `quality`, `realtime` | run the benchmark instead of playing (see below) |
 | `server` | ws url | decision service, default `ws://127.0.0.1:8765/ws` |
 
@@ -101,6 +103,66 @@ engine selector switches engines live (a new connection, a fresh episode).
 `DEFAULT_ENGINE` (heuristic), `PORT` (8765), `TELEMETRY_DIR` (`data/`), `LAYA_CHECKPOINT`
 (`english`), `LAYA_DEVICE` (`auto` → cuda > mps > cpu), `FRAMING` (`semantic` | `numeric`),
 `SHUFFLE_OPTIONS` (true), `LAYA_SEED` (0), `RANDOM_ENGINE_SEED` (0). See `server/config.py`.
+
+## Difficulty and speed
+
+### Difficulty levels
+
+`difficulty=1..5` (URL) or the selector in the engine panel (play mode) picks a spawner preset.
+Every level keeps the flyability guarantee — each obstacle row leaves a clear gap whose centre
+random-walks from row to row — but the rows get closer, denser, the gap narrower and its drift
+per row larger:
+
+| level | row spacing | clear gap half-width (start → after 1.5 km) | gap drift / row | density |
+|---:|---:|---|---:|---:|
+| 1 sparse | 7.0 m | 6.0 → 4.5 m | 1.2 m | 0.35 |
+| 2 easy | 6.4 m | 5.4 → 4.0 m | 1.7 m | 0.51 |
+| 3 normal | 5.8 m | 4.8 → 3.5 m | 2.2 m | 0.68 |
+| 4 hard | 5.1 m | 4.1 → 3.0 m | 2.7 m | 0.84 |
+| 5 brutal | 4.5 m | 3.5 → 2.5 m | 3.2 m | 1.00 |
+
+Level 5 is deliberately tuned so a path *always* exists (the gap never closes below 2.5 m
+half-width against a 0.6 m drone) but cannot be followed at full speed: 3.2 m of lateral drift
+between rows 4.5 m apart is more than 7 m/s of lateral speed can cover at 18 m/s forward. It can
+be followed at the engine's minimum speed. So the challenge is not just *which way* — the engine
+has to trade speed for safety.
+
+Measured with the heuristic engine, quality arena, 45 s, 16 seeds per level:
+
+| level | collisions / run | near-misses / run | banking decisions / 450 | mean speed |
+|---:|---:|---:|---:|---:|
+| 3 | 0.63 | 4.7 | ~35 | 12.2 m/s* |
+| 4 | 0.75 | 8.0 | ~65 | 15.2 m/s |
+| 5 | 0.69 | 10.4 | ~85 | 14.8 m/s |
+
+\* level-3 runs were recorded before the speed policy existed (cruise 12 m/s); with it the same
+seed-115 forest went from 546 m to **708 m** in 45 s at one collision. Collisions barely rise with
+level because the heuristic slows down; near-misses and banking are where the difficulty shows.
+
+### Engine-recommended speed (protocol 2)
+
+Every `Decision` may carry `target_speed` (m/s, in `[SPEED_MIN=4, bounds.speed_max=18]`), and
+the drone tracks it through the same first-order lag as its actions; `null` means cruise. The
+`SensorFrame.bounds` now carries `speed_max` so an engine knows the ceiling.
+
+* **heuristic** — full speed whenever nothing is within 30 m in the front cone, scaled down to
+  the floor by 8 m, and never faster than keeps 2.5 s of time-to-collision to whatever the
+  forward ray (or a closing bird) sees; `brake` forces the floor.
+* **laya** — a fourth question in the same forward pass: a 4-level `score` (*crawl / slow /
+  fast / full speed*) mapped linearly onto the band. Zero-shot it is as unreliable as its
+  steering; it is one of the four labels the fine-tune learns.
+* **random** — uniform over the band.
+
+The HUD shows `target speed` next to actual speed; arena results carry `mean_speed` and
+`max_speed`.
+
+### Keys
+
+`C` camera (chase / nose) · `R` sensor rays · `P` pause (play and arena) · `Space` reset (in an
+arena: restart the run) · `H` hide/show every panel · `A` hide/show the arena panel. The arena
+results panel docks at the top-centre so the drone stays visible; `A` dismisses it.
+
+![arena results docked at the top, drone visible](docs/screenshot-arena-panel-docked.png)
 
 ## The wire protocol
 
@@ -268,6 +330,45 @@ for a Laya fine-tune that this repo makes possible (it has **not** been done her
 
 Step 1 is why the arena records Laya's own frames too: a fine-tuned model must be tested on the
 states *it* gets itself into, not only on the heuristic's.
+
+## Teaching it to fly: the fine-tune loop
+
+Zero-shot, no way of asking the question makes Laya fly (`make eval-offline` scores every
+formulation against the heuristic on recorded frames — a 6-way `choice`, five per-direction
+`noul` questions, five ordinal `score` questions, semantic and numeric renderings — and all of
+them land near chance on the frames that matter). That is what upstream says too: the base
+checkpoints are a base to fine-tune. The simulator is built to close that loop:
+
+1. **Collect.** `make serve`, `make web`, then open the chained arena URL (`make collect` prints
+   it). With the GPU free the quality arena runs 45 simulated seconds in about a second, so 16
+   seeds at a difficulty level take under a minute and yield ~7,000 teacher-labelled frames.
+   Collect across levels 3–5 so the dataset has danger in it.
+2. **Label.** `server/dataset.py` re-runs the heuristic on every recorded frame, whoever was
+   flying, so frames Laya crashed on get the same consistent label. Exact duplicates collapse.
+   A label-ceiling check (identical prompt → majority label) puts the best any text-reader can do
+   on the semantic framing at **0.967** on danger frames, so the information is in the prompt.
+3. **Train.** `make finetune` — supervised, multi-task on the *same four questions* the engine
+   asks at inference, built with laya's own `build_sequence` so train and serve see byte-identical
+   prompts; option order re-shuffled per example per epoch so it cannot learn a slot; balanced
+   sampling (each epoch is half danger frames); a block-wise train/val split so neighbouring
+   frames never straddle it; the encoder frozen by default (`FINETUNE_ARGS="--unfreeze-top 2"`
+   trains the top encoder layers at a lower learning rate); best epoch saved atomically in
+   laya's own checkpoint layout.
+4. **Serve.** The `laya-ft` engine is the unchanged `LayaEngine` pointed at that checkpoint —
+   one module, one registration line — so an arena difference between `laya` and `laya-ft` is
+   the fine-tune and nothing else.
+
+Results so far (balanced 80-per-class sample of recorded frames, agreement with the teacher on
+frames where it does *not* say forward):
+
+| checkpoint | danger agreement | chooses `forward` on danger |
+|---|---:|---:|
+| base `english`, zero-shot | 0.42 | 0.29 |
+| v1: head only, 2 epochs, 2.3k frames | 0.34 | 0.38 |
+| v2: top-2 encoder layers, 14k frames | *running* | *running* |
+
+v1 made things worse — a frozen encoder plus a small stale dataset drifted toward `forward`.
+The honest state of this section is *in progress*; the pipeline is what is finished.
 
 ## Extending it
 

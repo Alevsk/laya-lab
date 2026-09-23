@@ -9,7 +9,7 @@ import random
 from time import perf_counter
 
 from ..config import get_settings
-from ..schemas import Action, Decision, SensorFrame
+from ..schemas import SPEED_MIN, Action, Decision, SensorFrame
 from .base import register
 
 _ACTIONS = list(Action)
@@ -36,6 +36,7 @@ class RandomEngine:
             decision_id=decision_id,
             latency_ms=(perf_counter() - t0) * 1000.0,
             probabilities=dict(_UNIFORM),
+            target_speed=round(self._rng.uniform(SPEED_MIN, frame.bounds.speed_max), 2),
             reason="uniform random",
         )
 

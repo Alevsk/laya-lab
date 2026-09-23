@@ -18,6 +18,13 @@
  * Difficulty ramps the obstacle density from `baseDensity` to 1.0 over `rampDistance` metres
  * flown and narrows the clear gap from `clearGap[0]` to `clearGap[1]`.
  *
+ * `level` (1..5, default 3) sets the whole preset: rows get closer, denser, the guaranteed gap
+ * narrower and its drift per row larger. The gap never closes below ~2.5 m half-width (the drone
+ * is 0.6 m), so a path always exists - but at level 5 the gap can move 3.2 m between rows 4.5 m
+ * apart, which a drone at full speed (18 m/s, 7 m/s lateral) cannot follow. It CAN follow it at
+ * the engine's minimum speed. That is the intended challenge: the engine has to trade speed for
+ * safety, not just pick a direction.
+ *
  * Contract note: `update` splices expired obstacles OUT of the array it is given (disposing
  * them) and RETURNS the newly spawned ones; the world appends those to its list. Every spawned
  * obstacle has already been added to `ctx.scene` by its factory.
@@ -48,6 +55,8 @@ export interface SpawnerOptions {
   rampDistance?: number;
   /** Placement attempts before a spot is given up. */
   placementAttempts?: number;
+  /** Difficulty preset 1 (sparse, wide gap) .. 5 (dense, narrow wandering gap). Explicit options override it. */
+  level?: number;
 }
 
 export interface RowRecord {
@@ -63,6 +72,8 @@ export interface ForestSpawner extends Spawner {
   rows(): readonly RowRecord[];
   /** 0 at the start, 1 once `rampDistance` metres have been flown. */
   difficulty(): number;
+  /** The difficulty preset this spawner was built with, 1..5. */
+  level(): number;
 }
 
 /** A backwards jump this large along the corridor means the drone was reset. */
@@ -82,16 +93,23 @@ interface Resolved {
   placementAttempts: number;
 }
 
+export const MIN_LEVEL = 1;
+export const MAX_LEVEL = 5;
+
+/** Linear blend between the level-1 and level-5 value of a preset parameter. */
+const preset = (level: number, easy: number, hard: number): number => easy + ((level - 1) / 4) * (hard - easy);
+
 export function createSpawner(rng: Rng, factories?: ObstacleFactory[], options: SpawnerOptions = {}): ForestSpawner {
+  const level = clamp(Math.round(options.level ?? 3), MIN_LEVEL, MAX_LEVEL);
   const o: Resolved = {
     corridor: options.corridor ?? DEFAULT_CORRIDOR,
-    rowSpacing: options.rowSpacing ?? 6,
+    rowSpacing: options.rowSpacing ?? preset(level, 7, 4.5),
     rowJitter: options.rowJitter ?? 1.5,
     minHorizon: options.minHorizon ?? 220,
     startClear: options.startClear ?? 30,
-    clearGap: options.clearGap ?? [5, 3.5],
-    gapDrift: options.gapDrift ?? 1.8,
-    baseDensity: options.baseDensity ?? 0.55,
+    clearGap: options.clearGap ?? [preset(level, 6, 3.5), preset(level, 4.5, 2.5)],
+    gapDrift: options.gapDrift ?? preset(level, 1.2, 3.2),
+    baseDensity: options.baseDensity ?? preset(level, 0.35, 1.0),
     rampDistance: options.rampDistance ?? 1500,
     placementAttempts: options.placementAttempts ?? 8,
   };
@@ -194,6 +212,7 @@ export function createSpawner(rng: Rng, factories?: ObstacleFactory[], options: 
     },
     rows: () => rows,
     difficulty: () => difficulty(lastDroneAlong),
+    level: () => level,
 
     update(ctx, obstacles) {
       const droneAlong = c.along(ctx.drone.position);

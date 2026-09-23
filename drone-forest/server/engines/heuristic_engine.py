@@ -16,7 +16,7 @@ from __future__ import annotations
 import math
 from time import perf_counter
 
-from ..schemas import Action, Decision, Ray, SensorFrame
+from ..schemas import SPEED_MIN, Action, Decision, Ray, SensorFrame
 from .base import register
 
 PLANNING_HORIZON = 40.0
@@ -63,6 +63,12 @@ FRONT_CONE_DEG = 30.0
 """Half-angle of the cone in which `nearest` is treated as being on the flight path."""
 
 AHEAD = ("forward", "left_15", "right_15")
+SPEED_CLEAR_M = 30.0
+"""Metres of clearance ahead at which full speed is allowed."""
+SPEED_NEAR_M = 8.0
+"""Metres of clearance ahead at which the drone is held to SPEED_MIN."""
+TTC_TARGET_S = 2.5
+"""Seconds of time-to-collision the chosen speed must preserve toward whatever is ahead."""
 
 
 def _clamp(x: float, lo: float = 0.0, hi: float = 1.0) -> float:
@@ -109,6 +115,7 @@ class HeuristicEngine:
             else {a.value: 1.0 / len(Action) for a in Action}
         )
         ttc = self._time_to_collision(frame, rays)
+        target_speed = self._target_speed(frame, rays, action)
         collision_imminent = _clamp(1.0 - ttc / TTC_HORIZON)
         urgency = 0.0 if ttc > 4.0 else 1.0 if ttc > 2.5 else 2.0 if ttc > 1.2 else 3.0
 
@@ -122,7 +129,8 @@ class HeuristicEngine:
             probabilities=probabilities,
             collision_imminent=collision_imminent,
             urgency=urgency,
-            reason=f"{_describe(rays['forward'], 'forward')}; {notes[action]} -> {action.value}",
+            target_speed=target_speed,
+            reason=f"{_describe(rays['forward'], 'forward')}; {notes[action]}; speed {target_speed:.0f} m/s -> {action.value}",
         )
 
     # ---- scoring -------------------------------------------------------------------------
@@ -170,6 +178,23 @@ class HeuristicEngine:
         notes[Action.DESCEND] = f"{_describe(rays['down'], 'down')}, floor {max(floor + ALTITUDE_MARGIN, 0):.0f} m"
         notes[Action.BRAKE] = f"boxed in (ahead {ahead * PLANNING_HORIZON:.0f} m avg, {drone.speed:.1f} m/s)"
         return scores, notes
+
+    def _target_speed(self, frame: SensorFrame, rays: dict[str, Ray], action: Action) -> float:
+        """Max speed whenever the way ahead is open; scale down with the nearest thing in the
+        front cone; never faster than keeps TTC_TARGET_S seconds to whatever the forward ray sees."""
+        smax = frame.bounds.speed_max
+        ahead = min((rays[n].distance for n in AHEAD if rays[n].hit is not None), default=math.inf)
+        frac = _clamp((ahead - SPEED_NEAR_M) / (SPEED_CLEAR_M - SPEED_NEAR_M))
+        target = SPEED_MIN + frac * (smax - SPEED_MIN)
+        fwd = rays["forward"]
+        if fwd.hit is not None:
+            target = min(target, max(SPEED_MIN, fwd.distance / TTC_TARGET_S))
+        nearest = frame.nearest
+        if nearest is not None and nearest.closing_speed > 0 and abs(nearest.bearing_deg) <= FRONT_CONE_DEG:
+            target = min(target, max(SPEED_MIN, nearest.distance / TTC_TARGET_S))
+        if action is Action.BRAKE:
+            target = SPEED_MIN
+        return round(_clamp(target, SPEED_MIN, smax), 2)
 
     def _time_to_collision(self, frame: SensorFrame, rays: dict[str, Ray]) -> float:
         speed = max(frame.drone.speed, 0.1)

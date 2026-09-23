@@ -22,6 +22,8 @@ import { nowMs } from './stats';
 export type ArenaMode = LoopMode;
 
 export interface ArenaParams {
+  /** difficulty preset 1..5 the world was built with (reported, not applied here) */
+  difficulty?: number;
   mode: ArenaMode;
   seconds: number;
   engine: string;
@@ -33,6 +35,10 @@ export interface ArenaResult {
   mode: ArenaMode;
   seed: number;
   seconds: number;
+  difficulty: number;
+  /** mean and peak forward speed over the run, m/s */
+  mean_speed: number;
+  max_speed: number;
   /** horizontal path length flown, metres */
   distance: number;
   /** straight-line horizontal distance from the start, metres */
@@ -68,6 +74,8 @@ export interface ArenaWorld {
 }
 
 export interface ArenaDrone {
+  setTargetSpeed(mps: number | null): void;
+  readonly speed: number;
   readonly position: THREE.Vector3;
   applyAction(action: ActionName, dt: number): void;
   update(dt: number, ctx: WorldContext): void;
@@ -76,6 +84,8 @@ export interface ArenaDrone {
 }
 
 export interface ArenaDeps {
+  /** when true the runner idles (still rendering) until it returns false - the P key */
+  isPaused?: () => boolean;
   world: ArenaWorld;
   drone: ArenaDrone;
   sensors: { frame(frameId: number, t: number, lastAction: ActionName | null): SensorFrame };
@@ -121,6 +131,7 @@ export async function runArena(params: ArenaParams, deps: ArenaDeps): Promise<Ar
   const intervalMs = deps.intervalMs ?? 100;
   const now = deps.now ?? nowMs;
   const yieldFrame = deps.yieldFrame ?? defaultYield;
+  const isPaused = deps.isPaused ?? (() => false);
   const { world, drone, sensors, source } = deps;
   const loop = deps.loop ?? createDecisionLoop(source, intervalMs, { mode: params.mode, now });
   loop.setMode(params.mode);
@@ -132,6 +143,8 @@ export async function runArena(params: ArenaParams, deps: ArenaDeps): Promise<Ar
   let collisions = 0;
   let nearMisses = 0;
   let distance = 0;
+  let speedSum = 0;
+  let speedMax = 0;
   const activeHits = new Set<number>();
   const activeNear = new Set<number>();
 
@@ -154,11 +167,14 @@ export async function runArena(params: ArenaParams, deps: ArenaDeps): Promise<Ar
       loop.tick(frame);
       if (params.mode === 'quality') await loop.awaitDecision();
     }
+    drone.setTargetSpeed(loop.last()?.target_speed ?? null);
     drone.applyAction(loop.current(), dt);
     drone.update(dt, world.ctx);
     world.update(dt);
     t += dt;
     step++;
+    speedSum += drone.speed;
+    if (drone.speed > speedMax) speedMax = drone.speed;
 
     const dx = drone.position.x - prevX;
     const dz = drone.position.z - prevZ;
@@ -193,6 +209,10 @@ export async function runArena(params: ArenaParams, deps: ArenaDeps): Promise<Ar
   const wallStart = now();
   if (params.mode === 'quality') {
     while (step < totalSteps) {
+      while (isPaused()) {
+        deps.render?.();
+        await yieldFrame();
+      }
       await stepOnce();
       if (step % 60 === 0) {
         progress();
@@ -205,6 +225,11 @@ export async function runArena(params: ArenaParams, deps: ArenaDeps): Promise<Ar
     let acc = 0;
     while (step < totalSteps) {
       await yieldFrame();
+      if (isPaused()) {
+        lastWall = now();
+        deps.render?.();
+        continue;
+      }
       const wallNow = now();
       acc += Math.min(0.25, (wallNow - lastWall) / 1000);
       lastWall = wallNow;
@@ -227,6 +252,9 @@ export async function runArena(params: ArenaParams, deps: ArenaDeps): Promise<Ar
     mode: params.mode,
     seed: params.seed,
     seconds: params.seconds,
+    difficulty: params.difficulty ?? 3,
+    mean_speed: round(speedSum / Math.max(1, step)),
+    max_speed: round(speedMax),
     distance: round(distance),
     displacement: round(Math.sqrt(dx * dx + dz * dz)),
     collisions,

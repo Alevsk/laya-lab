@@ -210,3 +210,27 @@ export function heuristicPolicy(
         : `${best} is the clearest sector`;
   return finish(best, why);
 }
+
+
+/** Speed policy, mirrored from server/engines/heuristic_engine.py::_target_speed. */
+export const SPEED_CLEAR_M = 30;
+export const SPEED_NEAR_M = 8;
+export const TTC_TARGET_S = 2.5;
+const SPEED_FLOOR = 4;
+
+/** Max speed whenever the way ahead is open, held down by whatever is closest in the front cone. */
+export function targetSpeed(frame: SensorFrame, action: ActionName): number {
+  const smax = frame.bounds.speed_max;
+  let ahead = Infinity;
+  for (const r of frame.rays) {
+    if ((r.name === 'forward' || r.name === 'left_15' || r.name === 'right_15') && r.hit !== null) ahead = Math.min(ahead, r.distance);
+  }
+  const frac = clamp01((ahead - SPEED_NEAR_M) / (SPEED_CLEAR_M - SPEED_NEAR_M));
+  let target = SPEED_FLOOR + frac * (smax - SPEED_FLOOR);
+  const fwd = frame.rays.find((r) => r.name === 'forward');
+  if (fwd && fwd.hit !== null) target = Math.min(target, Math.max(SPEED_FLOOR, fwd.distance / TTC_TARGET_S));
+  const n = frame.nearest;
+  if (n && n.closing_speed > 0 && Math.abs(n.bearing_deg) <= 30) target = Math.min(target, Math.max(SPEED_FLOOR, n.distance / TTC_TARGET_S));
+  if (action === 'brake') target = SPEED_FLOOR;
+  return Math.round(Math.min(smax, Math.max(SPEED_FLOOR, target)) * 100) / 100;
+}

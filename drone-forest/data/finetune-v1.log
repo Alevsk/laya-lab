@@ -1,0 +1,31 @@
+dataset: {'n': 2304, 'teacher_actions': {'forward': 1328, 'bank_left': 331, 'climb': 331, 'bank_right': 281, 'brake': 33}, 'source_engines': {'laya': 924, 'random': 898, 'heuristic': 482}, 'files': 2}
+train  : {'n': 2064, 'teacher_actions': {'forward': 1224, 'bank_left': 284, 'climb': 284, 'bank_right': 239, 'brake': 33}, 'source_engines': {'random': 818, 'laya': 797, 'heuristic': 449}, 'files': 2}
+val    : {'n': 240, 'teacher_actions': {'forward': 104, 'bank_left': 47, 'climb': 47, 'bank_right': 42}, 'source_engines': {'laya': 127, 'random': 80, 'heuristic': 33}, 'files': 1}
+device=mps trainable params=26.2M (encoder frozen except top 0)
+val BEFORE: {"n": 240, "agree": 0.30833333333333335, "danger_n": 136, "danger_agree": 0.3088235294117647, "danger_forward": 0.40441176470588236, "collision_acc": 0.7, "urgency_acc": 0.0875, "hist": {"forward": 87, "bank_right": 61, "bank_left": 45, "climb": 18, "brake": 16, "descend": 13}}
+  epoch 1 step 25/1120 loss 2.058 lr 8.47e-05 57s
+  epoch 1 step 50/1120 loss 1.330 lr 9.55e-05 113s
+  epoch 1 step 75/1120 loss 1.240 lr 9.33e-05 169s
+  epoch 1 step 100/1120 loss 1.204 lr 9.11e-05 228s
+  epoch 1 step 125/1120 loss 1.167 lr 8.88e-05 301s
+val after epoch 1: {"n": 240, "agree": 0.3375, "danger_n": 136, "danger_agree": 0.3161764705882353, "danger_forward": 0.39705882352941174, "collision_acc": 0.8208333333333333, "urgency_acc": 0.48333333333333334, "hist": {"forward": 92, "bank_right": 66, "bank_left": 43, "climb": 18, "descend": 11, "brake": 10}}
+  saved best -> data/checkpoints/laya-drone-ft
+  epoch 2 step 150/1120 loss 0.442 lr 8.66e-05 458s
+  epoch 2 step 175/1120 loss 1.096 lr 8.44e-05 527s
+  epoch 2 step 200/1120 loss 1.039 lr 8.21e-05 589s
+  epoch 2 step 225/1120 loss 1.031 lr 7.99e-05 650s
+  epoch 2 step 250/1120 loss 1.060 lr 7.77e-05 717s
+  epoch 2 step 275/1120 loss 1.013 lr 7.54e-05 773s
+val after epoch 2: {"n": 240, "agree": 0.39166666666666666, "danger_n": 136, "danger_agree": 0.3161764705882353, "danger_forward": 0.4485294117647059, "collision_acc": 0.8291666666666667, "urgency_acc": 0.6083333333333333, "hist": {"forward": 112, "bank_right": 61, "bank_left": 41, "climb": 19, "descend": 4, "brake": 3}}
+  saved best -> data/checkpoints/laya-drone-ft
+  epoch 3 step 300/1120 loss 0.743 lr 7.32e-05 882s
+  epoch 3 step 325/1120 loss 0.959 lr 7.10e-05 971s
+  epoch 3 step 350/1120 loss 0.946 lr 6.88e-05 1047s
+  epoch 3 step 375/1120 loss 0.935 lr 6.65e-05 1112s
+  epoch 3 step 400/1120 loss 0.961 lr 6.43e-05 1172s
+val after epoch 3: {"n": 240, "agree": 0.44583333333333336, "danger_n": 136, "danger_agree": 0.2426470588235294, "danger_forward": 0.6029411764705882, "collision_acc": 0.8458333333333333, "urgency_acc": 0.7125, "hist": {"forward": 156, "bank_right": 35, "bank_left": 29, "climb": 18, "brake": 1, "descend": 1}}
+  epoch 4 step 425/1120 loss 0.178 lr 6.21e-05 1269s
+  epoch 4 step 450/1120 loss 0.859 lr 5.98e-05 1334s
+  epoch 4 step 475/1120 loss 0.839 lr 5.76e-05 1394s
+  epoch 4 step 500/1120 loss 0.846 lr 5.54e-05 1450s
+  epoch 4 step 525/1120 loss 0.857 lr 5.31e-05 1502s

@@ -1,8 +1,8 @@
 """The Laya-backed DecisionEngine - the engine this simulator exists to test.
 
-One `agent.predict()` per frame carries three questions in a single forward pass: `move` (a choice
-over the six rendered actions), `collision_imminent` (a calibrated yes/no) and `urgency` (a 4-level
-score). The action returned is Laya's argmax over the move options - nothing else. This engine never
+One `agent.predict()` per frame carries four questions in a single forward pass: `move` (a choice
+over the six rendered actions), `collision_imminent` (a calibrated yes/no), `urgency` (a 4-level
+score) and `speed` (a 4-level score mapped onto [SPEED_MIN, bounds.speed_max]). The action returned is Laya's argmax over the move options - nothing else. This engine never
 consults the heuristic, never applies a safety override and never re-ranks by clearance; combining
 Laya with anything is a separate engine's job. What it does do is give Laya an honest best chance:
 semantic framing by default, six short consequence-stated options, and a per-decision shuffle of
@@ -174,6 +174,7 @@ class LayaEngine:
             probabilities={a.value: float(probs[a.value]) for a in framing.ACTION_ORDER},
             collision_imminent=float(answers["collision_imminent"]["noul"]),
             urgency=float(answers["urgency"]["score"]),
+            target_speed=framing.speed_from_level(float(answers["speed"]["score"]), frame.bounds),
             reason=f'laya picked "{chosen.label}: {chosen.description}"',
             option_index=index,
             option_order=prompt.order,
@@ -194,7 +195,7 @@ class LayaEngine:
             "load_ms": None if self.load_ms is None else round(self.load_ms, 1),
             "warmup_latency_ms": None if self.warmup_ms is None else round(self.warmup_ms, 1),
             "decisions": self.decisions,
-            "questions_per_forward_pass": 3,
+            "questions_per_forward_pass": 4,
             "notes": "action is Laya's argmax over 6 consequence-stated options; no overrides, no re-ranking",
         }
 

@@ -62,7 +62,11 @@ export function createSensors(world: SensorWorld, drone: SensorDrone, opts: Sens
     const velocity = { x: v.x, y: v.y, z: v.z };
     const heading = ((drone.headingDeg % 360) + 360) % 360;
     const basis = toBasis(heading);
-    const bounds = { altitude_min: world.ctx.bounds.altitude_min, altitude_max: world.ctx.bounds.altitude_max };
+    const bounds = {
+      altitude_min: world.ctx.bounds.altitude_min,
+      altitude_max: world.ctx.bounds.altitude_max,
+      speed_max: world.ctx.bounds.speed_max,
+    };
 
     last = {
       protocol: PROTOCOL_VERSION,

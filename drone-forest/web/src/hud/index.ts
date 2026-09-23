@@ -50,6 +50,9 @@ export interface HudState {
   arena?: string;
   seconds?: number;
   lateral?: number;
+  difficulty?: number;
+  /** engine-recommended speed, m/s; null = cruise */
+  targetSpeed?: number | null;
 }
 
 export interface Hud {
@@ -59,6 +62,12 @@ export interface Hud {
   /** Reflect an engine change that did not come from the selector (URL param, server info). */
   setEngine(engine: string): void;
   setEngines(engines: readonly string[]): void;
+  onDifficultyChange(cb: (level: number) => void): void;
+  setDifficulty(level: number): void;
+  /** Hide/show every panel (H). Returns the new visibility. */
+  togglePanels(): boolean;
+  /** Hide/show just the arena panel (A). Returns the new visibility. */
+  toggleArena(): boolean;
   setArenaProgress(progress: ArenaProgress): void;
   showArena(result: ArenaResult | null): void;
   flash(kind: 'collision' | 'near_miss'): void;
@@ -77,6 +86,9 @@ export const DEFAULT_KEYS: ReadonlyArray<readonly [string, string]> = [
   ['R', 'rays'],
   ['C', 'camera'],
   ['Space', 'reset'],
+  ['P', 'pause'],
+  ['H', 'panels'],
+  ['A', 'arena'],
 ];
 const RENDER_EVERY_MS = 100;
 
@@ -145,6 +157,16 @@ export function createHud(root: HTMLElement, opts: HudOptions = {}): Hud {
   setEngines(opts.engines ?? DEFAULT_ENGINE_OPTIONS);
   select.addEventListener('change', () => engineCbs.forEach((cb) => cb(select.value)));
 
+  const diffCbs: Array<(level: number) => void> = [];
+  const diffWrap = el('div', 'row');
+  diffWrap.append(el('span', 'k', 'difficulty'));
+  const diffSelect = el('select');
+  diffSelect.replaceChildren(...[1, 2, 3, 4, 5].map((n) => Object.assign(el('option', undefined, `${n} - ${['sparse', 'easy', 'normal', 'hard', 'brutal'][n - 1]}`), { value: String(n) })));
+  diffSelect.value = '3';
+  diffWrap.append(diffSelect);
+  engine.append(diffWrap);
+  diffSelect.addEventListener('change', () => diffCbs.forEach((cb) => cb(Number(diffSelect.value))));
+
   const conn = el('div', 'row');
   const dot = el('span', 'dot');
   const connText = el('span', 'v', 'connecting');
@@ -170,6 +192,7 @@ export function createHud(root: HTMLElement, opts: HudOptions = {}): Hud {
   flight.append(action, reason);
   const rAlt = row(flight, 'altitude');
   const rSpeed = row(flight, 'speed');
+  const rTarget = row(flight, 'target speed');
   const rNearest = row(flight, 'nearest');
   const rDist = row(flight, 'distance');
   const rBest = row(flight, 'best');
@@ -217,6 +240,7 @@ export function createHud(root: HTMLElement, opts: HudOptions = {}): Hud {
   arena.append(arenaBar);
   const arenaTable = el('table');
   arena.append(arenaTable);
+  arena.append(el('div', 'hint', 'A hide this panel · H hide all panels · Space restart · P pause · C camera · R rays'));
 
   const flashEl = el('div', 'flash');
   container.append(flashEl, engine, flight, hist, keys, arena);
@@ -266,6 +290,7 @@ export function createHud(root: HTMLElement, opts: HudOptions = {}): Hud {
     const speed = s.speed ?? f?.drone.speed;
     rAlt.v.textContent = altitude !== undefined ? `${altitude.toFixed(1)} m` : '–';
     rSpeed.v.textContent = speed !== undefined ? `${speed.toFixed(1)} m/s` : '–';
+    rTarget.v.textContent = s.targetSpeed != null ? `${s.targetSpeed.toFixed(1)} m/s` : 'cruise';
     rNearest.root.hidden = !f;
     rNearest.v.textContent = f?.nearest
       ? `${f.nearest.kind} ${f.nearest.distance.toFixed(1)}m @${f.nearest.bearing_deg.toFixed(0)}°${f.nearest.closing_speed > 0.5 ? ' closing' : ''}`
@@ -362,6 +387,20 @@ export function createHud(root: HTMLElement, opts: HudOptions = {}): Hud {
       if (Array.from(select.options).some((o) => o.value === name)) select.value = name;
     },
     setEngines,
+    togglePanels: () => {
+      container.classList.toggle('panels-hidden');
+      return !container.classList.contains('panels-hidden');
+    },
+    toggleArena: () => {
+      arena.hidden = !arena.hidden;
+      return !arena.hidden;
+    },
+    onDifficultyChange: (cb) => {
+      diffCbs.push(cb);
+    },
+    setDifficulty: (level) => {
+      diffSelect.value = String(level);
+    },
     setArenaProgress: (p) => {
       arena.hidden = false;
       arenaStatus.className = 'status';

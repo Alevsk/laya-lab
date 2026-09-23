@@ -13,7 +13,7 @@ SERVER_LOG := /tmp/df-server.log
 SEED ?= 7
 SECONDS ?= 45
 
-.PHONY: probe help setup serve web dev test lint build arena telemetry clean
+.PHONY: finetune eval-offline collect probe help setup serve web dev test lint build arena telemetry clean
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z0-9_. -]+:[^=]*?## .*$$' $(MAKEFILE_LIST) \
@@ -68,3 +68,14 @@ probe: ## Ask the running service to decide one frame: tree 6 m dead ahead, left
 	@for i in 1 2 3; do curl -s -X POST http://127.0.0.1:8765/decide -H 'content-type: application/json' \
 	  -d "$$(python3 -c "import json;d=json.load(open('scripts/tree_ahead_frame.json'));d['engine']='$(or $(ENGINE),laya)';print(json.dumps(d))")" \
 	  | python3 -c "import sys,json; d=json.load(sys.stdin); print(f\"  {d['engine']:<10} {d['action']:<11} P={d['probabilities'][d['action']]:.3f}  conf={d.get('confidence') or 0:.2f}  think={d['latency_ms']:.1f} ms  -- {d['reason']}\")"; done
+
+finetune: ## Fine-tune Laya on recorded telemetry with the heuristic as teacher -> data/checkpoints/laya-drone-ft (EPOCHS=8)
+	@PYTHONUNBUFFERED=1 $(PY) -m server.finetune --epochs $(or $(EPOCHS),8) --batch 12 --balance 1 --half-encoder 1 $(FINETUNE_ARGS)
+
+eval-offline: ## Score question formulations / a checkpoint against the teacher on recorded frames (CHECKPOINT=english|data/checkpoints/laya-drone-ft)
+	@$(PY) -m server.offline_eval --per-class $(or $(PER_CLASS),60) --checkpoint $(or $(CHECKPOINT),english) --formulations $(or $(FORMULATIONS),choice_semantic)
+
+collect: ## Print the URL that records a batch of teacher-labelled runs into data/ (needs `make serve` + `make web`)
+	@echo "Open in a browser (16 chained arena runs, ~12 min, ~7,000 labelled frames):"
+	@echo "  http://127.0.0.1:5173/?arena=quality&seconds=45&engine=heuristic&seed=100&seeds=100-115"
+	@echo "Telemetry lands in data/telemetry-*.jsonl; then: make finetune"

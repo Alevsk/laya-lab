@@ -4,7 +4,7 @@
  * the baseline every remote engine is measured against.
  */
 import type { Decision, DecisionSource, GameEvent, SensorFrame } from '../core/types';
-import { DEFAULT_HEURISTIC_CONFIG, heuristicPolicy, initialHeuristicState } from './heuristic';
+import { DEFAULT_HEURISTIC_CONFIG, heuristicPolicy, initialHeuristicState, targetSpeed } from './heuristic';
 import type { HeuristicConfig, HeuristicState } from './heuristic';
 import { LatencyWindow, RateMeter, nowMs } from './stats';
 import type { ExtendedDecisionStats } from './stats';
@@ -40,6 +40,7 @@ export class LocalHeuristicSource implements DecisionSource {
       probabilities: verdict.scores,
       collision_imminent: null,
       urgency: null,
+      target_speed: targetSpeed(frame, verdict.action),
       reason: verdict.reason,
       option_index: null,
       option_order: null,

@@ -40,7 +40,9 @@
 .hud .flight  { top: 12px; right: 12px; text-align: right; }
 .hud .hist    { bottom: 12px; left: 12px; }
 .hud .keys    { bottom: 12px; right: 12px; color: var(--hud-dim); min-width: 0; }
-.hud .arena   { top: 50%; left: 50%; transform: translate(-50%, -50%); min-width: 320px; }
+.hud .arena   { top: 12px; left: 50%; transform: translateX(-50%); min-width: 300px; max-width: 46vw; max-height: 42vh; overflow: auto; }
+.hud.panels-hidden .panel { display: none; }
+.hud .arena .hint { margin-top: 6px; color: var(--hud-dim); font-size: 11px; }
 
 .hud .row {
   display: flex;

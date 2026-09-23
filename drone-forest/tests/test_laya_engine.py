@@ -159,9 +159,10 @@ def test_orders_differ_across_frames() -> None:
     assert len(orders) > 10
 
 
-def test_questions_are_one_choice_one_noul_one_score() -> None:
+def test_questions_are_one_choice_one_noul_two_scores() -> None:
     p = framing.build_prompt(frame(TREE_AHEAD))
-    assert set(p.questions) == {"move", "collision_imminent", "urgency"}
+    assert set(p.questions) == {"move", "collision_imminent", "urgency", "speed"}
+    assert p.questions["speed"]["type"] == "score" and len(p.questions["speed"]["criteria"]) == 4
     assert p.questions["move"]["type"] == "choice"
     assert list(p.questions["move"]["criteria"]) == p.order
     assert p.questions["collision_imminent"]["type"] == "noul"

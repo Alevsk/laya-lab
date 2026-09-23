@@ -27,6 +27,9 @@ export interface Drone {
   readonly nearMissRadius: number;
   /** Set the flight targets for `a` and relax the velocity toward them over `dt`. */
   applyAction(a: ActionName, dt: number): void;
+  /** Engine-recommended forward speed in m/s; null returns to cruise. Takes effect through the same lag as actions. */
+  setTargetSpeed(mps: number | null): void;
+  readonly targetSpeed: number | null;
   /** Integrate position, clamp to the corridor bounds, animate rotors, lights and tilt. */
   update(dt: number, ctx: WorldContext): void;
   collide(obstacles: readonly Obstacle[]): CollisionResult;
@@ -61,6 +64,7 @@ export function createDrone(scene: THREE.Scene, opts: DroneOptions = {}): Drone 
   const position = model.root.position;
   const velocity = new THREE.Vector3(0, 0, -flight.cruiseSpeed);
   let action: ActionName = 'forward';
+  let targetSpeed: number | null = null;
   let targets: FlightTargets = targetsFor(action, flight);
   let clock = 0;
   const tilt = new THREE.Euler();
@@ -69,6 +73,7 @@ export function createDrone(scene: THREE.Scene, opts: DroneOptions = {}): Drone 
     position.copy(start);
     velocity.set(0, 0, -flight.cruiseSpeed);
     action = 'forward';
+    targetSpeed = null;
     targets = targetsFor(action, flight);
     tilt.set(0, 0, 0);
     model.body.rotation.set(0, 0, 0);
@@ -113,9 +118,17 @@ export function createDrone(scene: THREE.Scene, opts: DroneOptions = {}): Drone 
     applyAction(a, dt) {
       if (a !== action) {
         action = a;
-        targets = targetsFor(a, flight);
+        targets = { ...targetsFor(a, flight), speed: targetSpeed };
       }
       relaxVelocity(velocity, targets, dt, flight);
+    },
+    setTargetSpeed(mps) {
+      if (mps === targetSpeed) return;
+      targetSpeed = mps;
+      targets = { ...targets, speed: mps };
+    },
+    get targetSpeed() {
+      return targetSpeed;
     },
     update(dt, ctx) {
       position.addScaledVector(velocity, dt);

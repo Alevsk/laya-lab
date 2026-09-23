@@ -29,6 +29,7 @@ export type WorldBounds = Bounds & { half_width: number; corridor_length: number
 export const DEFAULT_BOUNDS: WorldBounds = {
   altitude_min: 2,
   altitude_max: 40,
+  speed_max: 18,
   half_width: 24,
   corridor_length: 180,
 };
