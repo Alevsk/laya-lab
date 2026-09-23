@@ -19,7 +19,8 @@
  *   seed=<int>       world seed (identical forest for every engine → fair comparison)
  *   hz=<n>           decision rate (default 10)
  *   corridor=forest|canyon|open   corridor preset (half-width 24 / 12 / 40 m)
- *   seconds=<n>      play: episode length, 0 (default) = fly until a collision; arena: run length
+ *   seconds=<n>      play: episode length, 0 (default) = fly until a collision; arena: run length,
+ *                    0 (default) = endless, until the first collision or Escape
  *   arena=quality|realtime   run the benchmark instead of playing (see decision/arena.ts)
  *   server=<ws url>  decision microservice (default ws://127.0.0.1:8765/ws)
  * If the service is unreachable the game falls back to the local heuristic so it always runs.
@@ -232,6 +233,7 @@ async function main(): Promise<void> {
       ['P', 'pause'],
       ['H', 'panels'],
       ['A', 'arena'],
+      ['Esc', 'stop'],
     ],
   });
 
@@ -249,6 +251,7 @@ async function main(): Promise<void> {
   let nearMisses = 0;
   let bestDistance = 0;
   let paused = false;
+  let stopRequested = false;
   let resetAt: number | null = null;
   let decisionClock = 0;
   let lastAction: ActionName | null = null;
@@ -379,6 +382,9 @@ async function main(): Promise<void> {
       case 'KeyA':
         hud.toggleArena();
         break;
+      case 'Escape':
+        if (cfg.arena) stopRequested = true;   // end an arena run now and show what it has
+        break;
     }
   });
   window.addEventListener('beforeunload', () => source.dispose());
@@ -409,6 +415,7 @@ async function main(): Promise<void> {
       intervalMs: 1000 / cfg.hz,
       render,
       isPaused: () => paused,
+      shouldStop: () => stopRequested,
       onFrame: (f) => {
         frameId = f.frame_id;
         simTime = f.t;

@@ -35,6 +35,8 @@ export interface ArenaResult {
   mode: ArenaMode;
   seed: number;
   seconds: number;
+  ended_by: 'time' | 'collision' | 'stop';
+  simulated_s: number;
   difficulty: number;
   /** mean and peak forward speed over the run, m/s */
   mean_speed: number;
@@ -86,6 +88,8 @@ export interface ArenaDrone {
 export interface ArenaDeps {
   /** when true the runner idles (still rendering) until it returns false - the P key */
   isPaused?: () => boolean;
+  /** when true the run ends now and reports what it has - the Escape key */
+  shouldStop?: () => boolean;
   world: ArenaWorld;
   drone: ArenaDrone;
   sensors: { frame(frameId: number, t: number, lastAction: ActionName | null): SensorFrame };
@@ -111,11 +115,12 @@ export function parseArenaParams(search: string): ArenaParams | null {
   const q = new URLSearchParams(search);
   const arena = q.get('arena');
   if (arena !== 'quality' && arena !== 'realtime') return null;
-  const seconds = Number(q.get('seconds') ?? 60);
+  // `seconds` absent or 0 = ENDLESS: fly until the first collision or an explicit stop.
+  const seconds = Number(q.get('seconds') ?? 0);
   const seed = Number(q.get('seed') ?? 7);
   return {
     mode: arena,
-    seconds: Number.isFinite(seconds) && seconds > 0 ? seconds : 60,
+    seconds: Number.isFinite(seconds) && seconds > 0 ? seconds : 0,
     engine: q.get('engine') ?? 'local',
     seed: Number.isFinite(seed) ? Math.floor(seed) : 7,
   };
@@ -132,11 +137,14 @@ export async function runArena(params: ArenaParams, deps: ArenaDeps): Promise<Ar
   const now = deps.now ?? nowMs;
   const yieldFrame = deps.yieldFrame ?? defaultYield;
   const isPaused = deps.isPaused ?? (() => false);
+  const shouldStop = deps.shouldStop ?? (() => false);
+  const endless = params.seconds <= 0;
+  let endedBy: 'time' | 'collision' | 'stop' = 'time';
   const { world, drone, sensors, source } = deps;
   const loop = deps.loop ?? createDecisionLoop(source, intervalMs, { mode: params.mode, now });
   loop.setMode(params.mode);
 
-  const totalSteps = Math.round(params.seconds / dt);
+  const totalSteps = endless ? Number.POSITIVE_INFINITY : Math.round(params.seconds / dt);
   let step = 0;
   let frameId = 0;
   let t = 0;
@@ -188,6 +196,7 @@ export async function runArena(params: ArenaParams, deps: ArenaDeps): Promise<Ar
         activeHits.add(res.hit.id);
         collisions++;
         event('collision', res.hit, { action: loop.current() });
+        if (endless) endedBy = 'collision';   // an endless run is over at its first crash
       }
     } else {
       activeHits.clear();
@@ -208,8 +217,9 @@ export async function runArena(params: ArenaParams, deps: ArenaDeps): Promise<Ar
 
   const wallStart = now();
   if (params.mode === 'quality') {
-    while (step < totalSteps) {
-      while (isPaused()) {
+    while (step < totalSteps && endedBy === 'time') {
+      if (shouldStop()) endedBy = 'stop';
+      while (isPaused() && !shouldStop()) {
         deps.render?.();
         await yieldFrame();
       }
@@ -223,8 +233,12 @@ export async function runArena(params: ArenaParams, deps: ArenaDeps): Promise<Ar
   } else {
     let lastWall = now();
     let acc = 0;
-    while (step < totalSteps) {
+    while (step < totalSteps && endedBy === 'time') {
       await yieldFrame();
+      if (shouldStop()) {
+        endedBy = 'stop';
+        break;
+      }
       if (isPaused()) {
         lastWall = now();
         deps.render?.();
@@ -233,7 +247,7 @@ export async function runArena(params: ArenaParams, deps: ArenaDeps): Promise<Ar
       const wallNow = now();
       acc += Math.min(0.25, (wallNow - lastWall) / 1000);
       lastWall = wallNow;
-      while (acc >= dt && step < totalSteps) {
+      while (acc >= dt && step < totalSteps && endedBy === 'time') {
         await stepOnce();
         acc -= dt;
       }
@@ -252,6 +266,9 @@ export async function runArena(params: ArenaParams, deps: ArenaDeps): Promise<Ar
     mode: params.mode,
     seed: params.seed,
     seconds: params.seconds,
+    /** 'time' = the fixed run length elapsed; 'collision' = endless run hit something; 'stop' = Escape */
+    ended_by: endedBy,
+    simulated_s: round(t),
     difficulty: params.difficulty ?? 3,
     mean_speed: round(speedSum / Math.max(1, step)),
     max_speed: round(speedMax),

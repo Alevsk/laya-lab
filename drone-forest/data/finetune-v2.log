@@ -1,0 +1,6 @@
+dataset: {'n': 14838, 'teacher_actions': {'forward': 11624, 'bank_left': 1399, 'bank_right': 1348, 'climb': 428, 'brake': 39}, 'source_engines': {'heuristic': 13016, 'laya': 924, 'random': 898}, 'files': 4}
+train  : {'n': 12118, 'teacher_actions': {'forward': 9501, 'bank_left': 1129, 'bank_right': 1080, 'climb': 369, 'brake': 39}, 'source_engines': {'heuristic': 10503, 'random': 818, 'laya': 797}, 'files': 4}
+val    : {'n': 2720, 'teacher_actions': {'forward': 2123, 'bank_left': 270, 'bank_right': 268, 'climb': 59}, 'source_engines': {'heuristic': 2513, 'laya': 127, 'random': 80}, 'files': 3}
+device=mps trainable params=50.8M (encoder frozen except top 2)
+val BEFORE: {"n": 2720, "agree": 0.819485294117647, "danger_n": 597, "danger_agree": 0.5728643216080402, "danger_forward": 0.32998324958123953, "collision_acc": 0.34191176470588236, "urgency_acc": 0.03308823529411765, "speed_acc": 0.20220588235294118, "hist": {"forward": 2084, "bank_right": 296, "bank_left": 282, "climb": 29, "brake": 16, "descend": 13}}
+  epoch 1 step 25/1312 loss 1.565 lr 8.50e-05 157s

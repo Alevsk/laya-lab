@@ -86,7 +86,7 @@ logs a warning and flies on the in-browser heuristic.
 | `seed` | int (default 1) | world seed; the same seed is the same forest for every engine |
 | `hz` | 1..60 (default 10) | decision cadence |
 | `corridor` | `forest` (default), `canyon`, `open` | corridor half-width 24 / 12 / 40 m |
-| `seconds` | number | play: episode length (0 = until a collision); arena: run length |
+| `seconds` | number | play: episode length, 0 (default) = fly until a collision, then a new episode; arena: run length, **0 (default) = endless** — fly until the first collision or `Esc`, results shown when it ends |
 | `difficulty` | 1..5 | obstacle preset: 1 sparse, 3 normal (default), 5 dense with a narrow wandering gap — see *Difficulty and speed* |
 | `seeds` | `A-B` | arena only: chain runs over seeds A..B, reloading with `seed+1` after each result — one URL collects a whole batch |
 | `arena` | `quality`, `realtime` | run the benchmark instead of playing (see below) |

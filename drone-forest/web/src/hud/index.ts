@@ -89,6 +89,7 @@ export const DEFAULT_KEYS: ReadonlyArray<readonly [string, string]> = [
   ['P', 'pause'],
   ['H', 'panels'],
   ['A', 'arena'],
+  ['Esc', 'stop'],
 ];
 const RENDER_EVERY_MS = 100;
 
@@ -240,7 +241,7 @@ export function createHud(root: HTMLElement, opts: HudOptions = {}): Hud {
   arena.append(arenaBar);
   const arenaTable = el('table');
   arena.append(arenaTable);
-  arena.append(el('div', 'hint', 'A hide this panel · H hide all panels · Space restart · P pause · C camera · R rays'));
+  arena.append(el('div', 'hint', 'Esc stop · Space restart · P pause · A hide this panel · H hide all panels · C camera · R rays'));
 
   const flashEl = el('div', 'flash');
   // left column: the engine panel with the arena panel stacked directly beneath it, so the
@@ -408,8 +409,11 @@ export function createHud(root: HTMLElement, opts: HudOptions = {}): Hud {
     setArenaProgress: (p) => {
       arena.hidden = false;
       arenaStatus.className = 'status';
-      arenaStatus.textContent = `running · ${p.t.toFixed(0)} / ${p.seconds} s · ${p.action}`;
-      arenaFill.style.width = `${Math.round((100 * Math.min(p.t, p.seconds)) / p.seconds)}%`;
+      const endless = p.seconds <= 0;
+      arenaStatus.textContent = endless
+        ? `running · ${p.t.toFixed(0)} s · until a crash or Esc · ${p.action}`
+        : `running · ${p.t.toFixed(0)} / ${p.seconds} s · ${p.action}`;
+      arenaFill.style.width = endless ? '100%' : `${Math.round((100 * Math.min(p.t, p.seconds)) / p.seconds)}%`;
       arenaRows([
         ['distance', `${p.distance.toFixed(0)} m`],
         ['collisions', String(p.collisions)],
@@ -423,7 +427,7 @@ export function createHud(root: HTMLElement, opts: HudOptions = {}): Hud {
       }
       arena.hidden = false;
       arenaStatus.className = 'status done';
-      arenaStatus.textContent = `done · ${r.engine} · ${r.mode} · seed ${r.seed}`;
+      arenaStatus.textContent = `done · ${r.engine} · ${r.mode} · seed ${r.seed} · ${r.ended_by === 'collision' ? 'crashed' : r.ended_by === 'stop' ? 'stopped (Esc)' : 'time up'} after ${r.simulated_s.toFixed(0)} s`;
       arenaFill.style.width = '100%';
       const rows: Array<[string, string]> = [
         ['simulated', `${r.seconds} s (${r.sim_steps} steps, ${(r.wall_ms / 1000).toFixed(1)} s wall)`],
