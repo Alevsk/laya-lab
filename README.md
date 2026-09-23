@@ -453,6 +453,14 @@ into a tree that is close"* at P = 0.996. The heuristic flew the same worlds wit
 Obstacle kinds, obstacle behaviours (birds wander randomly today; an AI policy plugs in at the
 same seam) and decision engines are each one new module plus one registration line.
 
+It has since grown difficulty levels 1–5 (denser forests with a narrower, faster-wandering gap
+that a full-speed drone cannot follow — the engine must trade speed for safety), an
+engine-recommended `target_speed` in the protocol (the same seed went from 546 m to 708 m in
+45 s once the heuristic could choose its speed), a chained-seed arena that collects thousands
+of teacher-labelled frames per minute, and a fine-tune loop (`make finetune`) that trains
+Laya on that telemetry and serves the result as the `laya-ft` engine. Whether the fine-tune
+makes it fly is reported honestly in that folder's README as the runs complete.
+
 ---
 
 ## Notes, caveats and honest limits
