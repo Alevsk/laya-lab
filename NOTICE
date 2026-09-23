@@ -1,0 +1,18 @@
+laya-lab
+========
+
+The MIT licence in LICENSE covers the original contents of this repository:
+the scenarios in scenarios/, the utilities in tools/, the Makefile and the
+README.
+
+It does NOT cover Laya itself. Laya is a separate project by Convai
+Innovations, licensed Apache-2.0:
+
+    https://github.com/NandhaKishorM/laya
+
+Laya's source is not vendored here. `make upstream` clones it into ./upstream/
+at the commit recorded in UPSTREAM_PIN, and that directory is git-ignored, so
+no Apache-2.0 code is redistributed by this repository.
+
+scenarios/06_silent_footguns.py quotes one line of Laya's common.py inline, with
+a file:line citation, in order to explain the behaviour it demonstrates.

@@ -1,0 +1,36 @@
+name: ci
+
+# The heavyweight scenarios need ~2.3 GB of checkpoints, so CI runs only the parts
+# that are genuinely weight-free: linting, the upstream suites that load no model,
+# and scenario 1 (pure-Python routing). `make verify` is the full local gate.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Fetch the pinned Laya source
+        run: make upstream
+
+      - name: Install dependencies
+        run: uv sync --frozen --group dev
+
+      - name: Lint
+        run: make lint
+
+      - name: Upstream suites that need no model weights
+        run: make test-fast
+
+      - name: Scenario 1 (routing; loads no checkpoints)
+        run: make quick

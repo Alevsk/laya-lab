@@ -1,0 +1,57 @@
+[project]
+name = "laya-lab"
+version = "0.1.0"
+description = "A reproducible, self-hosted bootstrap of the Laya decision engine, with measured capability scenarios"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { file = "LICENSE" }
+keywords = ["laya", "decision-model", "system-one", "calibration", "routing", "guardrails", "apple-silicon", "mps"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "laya",
+    "torch>=2.4",
+    "transformers>=4.48",
+    "safetensors>=0.4",
+    "huggingface_hub>=0.26",
+    "numpy>=1.26",
+]
+
+[project.urls]
+"Laya (upstream)" = "https://github.com/NandhaKishorM/laya"
+"Laya on Hugging Face" = "https://huggingface.co/convaiinnovations/laya"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-timeout>=2.3",
+    "ruff>=0.6",
+]
+
+# Laya is not vendored: `make upstream` clones it to ./upstream at UPSTREAM_PIN.
+[tool.uv.sources]
+laya = { path = "upstream", editable = true }
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+extend-exclude = ["upstream"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4"]
+# E501  line length is handled by the formatter's 110 above.
+# UP031 the scenarios use %-formatting throughout to build fixed-width terminal
+#       tables; str.format would make the alignment far less readable.
+# B905  zip(..., strict=) adds noise in report-building loops over paired data.
+ignore = ["E501", "UP031", "B905"]
+
+[tool.ruff.lint.per-file-ignores]
+# Scenarios and tools must insert scenarios/ on sys.path before importing _common,
+# so their imports legitimately are not at the top of the file and are not sorted.
+"scenarios/*.py" = ["E402", "I001"]
+"tools/*.py" = ["E402", "I001"]
