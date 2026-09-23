@@ -243,7 +243,11 @@ export function createHud(root: HTMLElement, opts: HudOptions = {}): Hud {
   arena.append(el('div', 'hint', 'A hide this panel · H hide all panels · Space restart · P pause · C camera · R rays'));
 
   const flashEl = el('div', 'flash');
-  container.append(flashEl, engine, flight, hist, keys, arena);
+  // left column: the engine panel with the arena panel stacked directly beneath it, so the
+  // arena never overlaps the side panels and never covers the drone in the centre of the view
+  const colLeft = el('div', 'col left');
+  colLeft.append(engine, arena);
+  container.append(flashEl, colLeft, flight, hist, keys);
 
   // ---- rendering
   let lastRender = -Infinity;

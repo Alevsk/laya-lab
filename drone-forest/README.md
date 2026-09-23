@@ -160,9 +160,10 @@ The HUD shows `target speed` next to actual speed; arena results carry `mean_spe
 
 `C` camera (chase / nose) · `R` sensor rays · `P` pause (play and arena) · `Space` reset (in an
 arena: restart the run) · `H` hide/show every panel · `A` hide/show the arena panel. The arena
-results panel docks at the top-centre so the drone stays visible; `A` dismisses it.
+results panel stacks directly under the decision-engine panel, so it never overlaps the
+other panels or covers the drone; `A` dismisses it.
 
-![arena results docked at the top, drone visible](docs/screenshot-arena-panel-docked.png)
+![arena results stacked under the engine panel, drone visible](docs/screenshot-arena-panel-docked.png)
 
 ## The wire protocol
 
