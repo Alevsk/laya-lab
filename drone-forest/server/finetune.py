@@ -4,7 +4,7 @@ Why: zero-shot, every question formulation scores near chance against the teache
 (server/offline_eval.py). Upstream says the base checkpoints are a base to fine-tune, and the
 telemetry the service writes is exactly the dataset for it.
 
-What: supervised multi-task training on the SAME three questions the engine asks at inference
+What: supervised multi-task training on the SAME four questions the engine asks at inference
 (move: 6-way choice, collision_imminent: noul, urgency: 4-level score, speed: 4-level score), built with laya's own
 build_sequence so train and inference see byte-identical prompts. Option order is re-shuffled
 for every example every epoch, so the model cannot learn a slot; it has to read the words.
@@ -37,7 +37,7 @@ OUT_DEFAULT = ROOT / "data" / "checkpoints" / "laya-drone-ft"
 
 
 def build_items(agent, e: Example, seed: int) -> list[dict]:
-    """The three question sequences for one example, with integer labels, laya-style."""
+    """The four question sequences for one example, with integer labels, laya-style."""
     from laya.agent import Agent
     from laya.common import QTYPES, build_sequence, render_options
 

@@ -1,7 +1,7 @@
 """The fine-tuned Laya engine: the same LayaEngine, pointed at a checkpoint trained by
 server/finetune.py on this simulator's own telemetry with the heuristic as teacher.
 
-Nothing else differs. Same framing, same shuffle, same three questions, same argmax - so a
+Nothing else differs. Same framing, same shuffle, same four questions, same argmax - so a
 difference between "laya" and "laya-ft" in the arena is the fine-tune and only the fine-tune.
 LAYA_FT_CHECKPOINT points at the checkpoint directory (default data/checkpoints/laya-drone-ft).
 """

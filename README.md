@@ -470,7 +470,9 @@ engine × difficulty level × seed in both arena modes (quality mode removes lat
 measures the policy; realtime mode keeps the wall clock and measures whether the engine keeps
 up at 10 Hz), and `make scoreboard` turns the recorded results into one table of collisions
 per run, rock hits, near-misses, distance, chosen speed, ticks met and think latency. The
-scoreboards and what they say are in that folder's README under *Evaluation protocol*. As of
+scoreboards and what they say are in that folder's README under *Evaluation protocol*, and
+[`drone-forest/FINETUNING.md`](drone-forest/FINETUNING.md) is the handoff for training the next
+`laya-ft` version. As of
 the third fine-tune (v3, trained on 80k frames that include the ogres): Laya flies every run
 at 13–14 m/s with 1–2.5 collisions per 45 s against the teacher's 0 and random's 3.5–9, and
 decides in ~85–125 ms per frame on an M4 Max — usable, at the edge of a 10 Hz loop, and not

@@ -583,6 +583,10 @@ states *it* gets itself into, not only on the heuristic's.
 
 ## Teaching it to fly: the fine-tune loop
 
+> **Continuing this work?** Read [`FINETUNING.md`](FINETUNING.md) first: the exact commands
+> and results of v1–v3, the knob reference, the pitfalls, and the ranked list of what to try
+> for v4. This section is the overview; that document is the handoff.
+
 Zero-shot, no way of asking the question makes Laya fly (`make eval-offline` scores every
 formulation against the heuristic on recorded frames — a 6-way `choice`, five per-direction
 `noul` questions, five ordinal `score` questions, semantic and numeric renderings — and all of

@@ -76,9 +76,11 @@ eval-offline: ## Score question formulations / a checkpoint against the teacher 
 	@$(PY) -m server.offline_eval --per-class $(or $(PER_CLASS),60) --checkpoint $(or $(CHECKPOINT),english) --formulations $(or $(FORMULATIONS),choice_semantic)
 
 collect: ## Print the URL that records teacher-flown runs at levels 3-5 into data/ (needs `make serve` + `make web`)
-	@echo "Open in a browser (36 chained arena runs, ~10 min, ~20,000 labelled frames incl. ogres and thrown rocks):"
-	@echo "  http://127.0.0.1:5173/?arena=quality&seconds=60&engine=heuristic&difficulties=3,4,5&difficulty=3&seed=100&seeds=100-111"
-	@echo "Telemetry lands in data/telemetry-*.jsonl; then: make finetune"
+	@echo "Open in a browser (72 chained arena runs, ~3 min with the GPU free, ~40,000 labelled frames incl. ogres and thrown rocks):"
+	@echo "  http://127.0.0.1:5173/?arena=quality&seconds=60&engine=heuristic&difficulties=3,4,5&difficulty=3&seed=100&seeds=100-123"
+	@echo "Then a few student runs (the current laya-ft flying its own path, relabelled by the teacher):"
+	@echo "  http://127.0.0.1:5173/?arena=quality&seconds=60&engine=laya-ft&difficulties=3,4,5&difficulty=3&seed=100&seeds=100-102"
+	@echo "Telemetry lands in data/telemetry-*.jsonl; then see FINETUNING.md (make finetune for a quick run)"
 
 check-web: ## Headless checks of the game modules (spawner flyability, ogre throwing, ballistics) via esbuild + node
 	@cd web && mkdir -p .check && for f in obstacles/spawner.check obstacles/ogre.check obstacles/behaviors/ballistics.check decision/matrix.check; do \
