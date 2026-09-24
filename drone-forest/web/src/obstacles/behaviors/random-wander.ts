@@ -74,16 +74,19 @@ export class RandomWanderBehavior implements ObstacleBehavior {
     // Integrate, then reflect any component that carried the obstacle past a boundary.
     p.addScaledVector(v, dt).addScaledVector(c.up, bob * dt);
 
+    // The walls and the altitude band are hard limits: always clamp the position back inside,
+    // and reflect the velocity only when it points outward. (Clamping only while moving
+    // outward let the bob term creep an obstacle a few decimetres past the band.)
     const across = c.across(p);
     const vAcross = c.across(v);
-    if ((across > wall && vAcross > 0) || (across < -wall && vAcross < 0)) {
-      v.addScaledVector(c.right, -2 * vAcross);
+    if (across > wall || across < -wall) {
+      if ((across > wall && vAcross > 0) || (across < -wall && vAcross < 0)) v.addScaledVector(c.right, -2 * vAcross);
       p.addScaledVector(c.right, clamp(across, -wall, wall) - across);
     }
     const height = p.dot(c.up);
     const vUp = v.dot(c.up);
-    if ((height > altMax && vUp > 0) || (height < altMin && vUp < 0)) {
-      v.addScaledVector(c.up, -2 * vUp);
+    if (height > altMax || height < altMin) {
+      if ((height > altMax && vUp > 0) || (height < altMin && vUp < 0)) v.addScaledVector(c.up, -2 * vUp);
       p.addScaledVector(c.up, clamp(height, altMin, altMax) - height);
     }
   }

@@ -13,7 +13,7 @@ SERVER_LOG := /tmp/df-server.log
 SEED ?= 7
 SECONDS ?= 45
 
-.PHONY: finetune eval-offline collect probe help setup serve web dev test lint build arena telemetry clean
+.PHONY: evaluate scoreboard check-web finetune eval-offline collect probe help setup serve web dev test lint build arena telemetry clean
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z0-9_. -]+:[^=]*?## .*$$' $(MAKEFILE_LIST) \
@@ -75,7 +75,27 @@ finetune: ## Fine-tune Laya on recorded telemetry with the heuristic as teacher 
 eval-offline: ## Score question formulations / a checkpoint against the teacher on recorded frames (CHECKPOINT=english|data/checkpoints/laya-drone-ft)
 	@$(PY) -m server.offline_eval --per-class $(or $(PER_CLASS),60) --checkpoint $(or $(CHECKPOINT),english) --formulations $(or $(FORMULATIONS),choice_semantic)
 
-collect: ## Print the URL that records a batch of teacher-labelled runs into data/ (needs `make serve` + `make web`)
-	@echo "Open in a browser (16 chained arena runs, ~12 min, ~7,000 labelled frames):"
-	@echo "  http://127.0.0.1:5173/?arena=quality&seconds=45&engine=heuristic&seed=100&seeds=100-115"
+collect: ## Print the URL that records teacher-flown runs at levels 3-5 into data/ (needs `make serve` + `make web`)
+	@echo "Open in a browser (36 chained arena runs, ~10 min, ~20,000 labelled frames incl. ogres and thrown rocks):"
+	@echo "  http://127.0.0.1:5173/?arena=quality&seconds=60&engine=heuristic&difficulties=3,4,5&difficulty=3&seed=100&seeds=100-111"
 	@echo "Telemetry lands in data/telemetry-*.jsonl; then: make finetune"
+
+check-web: ## Headless checks of the game modules (spawner flyability, ogre throwing, ballistics) via esbuild + node
+	@cd web && mkdir -p .check && for f in obstacles/spawner.check obstacles/ogre.check obstacles/behaviors/ballistics.check decision/matrix.check; do \
+	  ./node_modules/.bin/esbuild src/$$f.ts --bundle --platform=node --format=esm --log-level=error --outfile=.check/$$(basename $$f).mjs && node .check/$$(basename $$f).mjs | tail -3; done
+
+# The evaluation matrix: every engine x level x seed, in both arena modes. Quality mode removes
+# latency (how GOOD are the decisions); realtime mode keeps it (how FAST - can it keep up).
+EVAL_ENGINES ?= heuristic,laya,laya-ft,random
+EVAL_LEVELS ?= 3,5
+EVAL_SEEDS ?= 7-8
+EVAL_SECONDS ?= 45
+
+evaluate: ## Print the one URL that runs the whole evaluation matrix in the game (needs `make serve` + `make web`)
+	@echo "Open in a browser and leave it: the page runs every combination and reports each result to the service."
+	@echo "  http://127.0.0.1:5173/?arena=quality&modes=quality,realtime&engines=$(EVAL_ENGINES)&difficulties=$(EVAL_LEVELS)&seeds=$(EVAL_SEEDS)&seconds=$(EVAL_SECONDS)&engine=$(firstword $(subst $(comma), ,$(EVAL_ENGINES)))&difficulty=$(firstword $(subst $(comma), ,$(EVAL_LEVELS)))&seed=$(firstword $(subst -, ,$(EVAL_SEEDS)))"
+	@echo "When the console prints ARENA_MATRIX_DONE:  make scoreboard"
+comma := ,
+
+scoreboard: ## Aggregate recorded arena results into the good-and-fast table (SCOREBOARD_ARGS=--all for every file)
+	@PYTHONPATH=. $(PY) -m server.scoreboard $(SCOREBOARD_ARGS) --json out/scoreboard.json

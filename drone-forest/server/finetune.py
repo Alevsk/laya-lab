@@ -90,6 +90,23 @@ def forward_logits(model, b, device: str, half_encoder: bool, train_encoder: boo
     return head_logits(model, h, att, mpos, mmask, qt)
 
 
+def cap_val(val: list[Example], n: int, seed: int = 0) -> list[Example]:
+    """Evaluation costs a forward pass per frame, so a big validation split is capped - keeping
+    the frames that decide whether the fine-tune worked: every rock-dodge frame first, then the
+    other danger frames, then forward frames, shuffled."""
+    rng = random.Random(seed)
+    rock = [e for e in val if e.teacher is not Action.FORWARD and e.frame.threat is not None
+            and e.frame.threat.kind == "projectile"]
+    danger = [e for e in val if e.teacher is not Action.FORWARD and e not in rock]
+    fwd = [e for e in val if e.teacher is Action.FORWARD]
+    for xs in (rock, danger, fwd):
+        rng.shuffle(xs)
+    picked = rock[:n // 3] + danger[:n // 3]
+    picked += fwd[:max(0, n - len(picked))]
+    rng.shuffle(picked)
+    return picked
+
+
 def run_eval(agent, examples: list[Example], device: str, seed: int = 12345, batch: int = 16,
              half_encoder: bool = False) -> dict:
     import torch
@@ -98,6 +115,7 @@ def run_eval(agent, examples: list[Example], device: str, seed: int = 12345, bat
     model = agent.model
     model.eval()
     n = agree = danger = danger_agree = danger_fwd = 0
+    rock = rock_agree = 0                 # frames where the teacher is dodging a thrown rock
     hist: Counter = Counter()
     coll_ok = urg_ok = spd_ok = 0
     with torch.no_grad():
@@ -122,6 +140,9 @@ def run_eval(agent, examples: list[Example], device: str, seed: int = 12345, bat
                             danger += 1
                             danger_agree += a == e.teacher
                             danger_fwd += a is Action.FORWARD
+                            if e.frame.threat is not None and e.frame.threat.kind == "projectile":
+                                rock += 1
+                                rock_agree += a == e.teacher
                     elif it["qid"] == "collision_imminent":
                         coll_ok += p == it["label"]
                     elif it["qid"] == "urgency":
@@ -129,7 +150,8 @@ def run_eval(agent, examples: list[Example], device: str, seed: int = 12345, bat
                     else:
                         spd_ok += p == it["label"]
     return {"n": n, "agree": agree / max(1, n), "danger_n": danger, "danger_agree": danger_agree / max(1, danger),
-            "danger_forward": danger_fwd / max(1, danger), "collision_acc": coll_ok / max(1, n),
+            "danger_forward": danger_fwd / max(1, danger), "rock_n": rock, "rock_agree": rock_agree / max(1, rock),
+            "collision_acc": coll_ok / max(1, n),
             "urgency_acc": urg_ok / max(1, n), "speed_acc": spd_ok / max(1, n), "hist": dict(hist.most_common())}
 
 
@@ -138,10 +160,16 @@ def save_checkpoint(agent, out: Path, base_checkpoint: str, meta: dict) -> None:
     from huggingface_hub import snapshot_download
     from safetensors.torch import save_file
 
-    base = Path(snapshot_download("convaiinnovations/laya", local_files_only=True,
-                                  allow_patterns=["rl_agent_config.json", "tokenizer/*", "encoder/*"]))
-    sub = {"english": "", "multilingual": "multilingual", "typed-decisions": "typed-decisions"}[base_checkpoint]
-    src = base / sub if sub else base
+    if os.path.isdir(base_checkpoint):        # continuing from an earlier fine-tune: keep its lineage
+        src = Path(base_checkpoint)
+        origin = json.load(open(src / "rl_agent_config.json")).get("fine_tuned_from", base_checkpoint)
+        origin = f"{origin} -> {src.name}"
+    else:
+        base = Path(snapshot_download("convaiinnovations/laya", local_files_only=True,
+                                      allow_patterns=["rl_agent_config.json", "tokenizer/*", "encoder/*"]))
+        sub = {"english": "", "multilingual": "multilingual", "typed-decisions": "typed-decisions"}[base_checkpoint]
+        src = base / sub if sub else base
+        origin = f"convaiinnovations/laya/{sub or 'english'}"
     final = out
     out = final.with_name(final.name + ".tmp")
     if out.exists():
@@ -150,7 +178,7 @@ def save_checkpoint(agent, out: Path, base_checkpoint: str, meta: dict) -> None:
     for d in ("tokenizer", "encoder"):
         shutil.copytree(src / d, out / d)
     cfg = json.load(open(src / "rl_agent_config.json"))
-    cfg.update({"model_name": "laya-drone-ft", "fine_tuned": True, "fine_tuned_from": f"convaiinnovations/laya/{sub or 'english'}",
+    cfg.update({"model_name": "laya-drone-ft", "fine_tuned": True, "fine_tuned_from": origin,
                 "drone_forest_training": meta})
     json.dump(cfg, open(out / "rl_agent_config.json", "w"), indent=2)
     sd = {k: v.detach().to("cpu").to(__import__("torch").float16).contiguous() for k, v in agent.model.state_dict().items()}
@@ -171,6 +199,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--encoder-lr", type=float, default=2e-5, help="learning rate for unfrozen encoder layers")
     ap.add_argument("--unfreeze-top", type=int, default=0, help="also train the top N encoder layers")
     ap.add_argument("--max-minutes", type=float, default=0.0, help="0 = no time box")
+    ap.add_argument("--val-examples", type=int, default=0,
+                    help="cap the validation set (rock-dodge frames first, then other danger, then forward); 0 = all")
+    ap.add_argument("--dodge-repeat", type=int, default=1,
+                    help="repeat frames where the teacher dodges a thrown rock this many times per epoch (they are rare)")
+    ap.add_argument("--epoch-examples", type=int, default=0,
+                    help="cap the (balanced) examples drawn per epoch; 0 = all. Keeps the LR schedule honest on big datasets")
     ap.add_argument("--val-frac", type=float, default=0.2)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out", default=str(OUT_DEFAULT))
@@ -187,6 +221,8 @@ def main(argv: list[str] | None = None) -> int:
 
     examples = load_examples()
     train, val = block_split(examples, args.val_frac, seed=args.seed)
+    if args.val_examples:
+        val = cap_val(val, args.val_examples, seed=args.seed)
     print("dataset:", summary(examples))
     print("train  :", summary(train))
     print("val    :", summary(val))
@@ -216,7 +252,13 @@ def main(argv: list[str] | None = None) -> int:
     if enc_params:
         groups.append({"params": enc_params, "lr": args.encoder_lr})
     opt = torch.optim.AdamW(groups, weight_decay=0.01)
-    n_epoch = 2 * sum(1 for e in train if e.teacher is not Action.FORWARD) if args.balance else len(train)
+    n_danger = sum(1 for e in train if e.teacher is not Action.FORWARD)
+    n_dodge = sum(1 for e in train if e.teacher is not Action.FORWARD and e.frame.threat is not None
+                  and e.frame.threat.kind == "projectile")
+    n_epoch = 2 * (n_danger + n_dodge * max(0, args.dodge_repeat - 1)) if args.balance else len(train)
+    print(f"train danger frames {n_danger}, of which rock dodges {n_dodge} (x{args.dodge_repeat})")
+    if args.epoch_examples:
+        n_epoch = min(n_epoch, args.epoch_examples)
     steps_per_epoch = (n_epoch + args.batch - 1) // args.batch
     total = steps_per_epoch * args.epochs
     warm = min(30, total // 10)
@@ -235,11 +277,14 @@ def main(argv: list[str] | None = None) -> int:
         if args.balance:
             fwd = [i for i, e in enumerate(train) if e.teacher is Action.FORWARD]
             other = [i for i, e in enumerate(train) if e.teacher is not Action.FORWARD]
+            dodge = [i for i in other if train[i].frame.threat is not None and train[i].frame.threat.kind == "projectile"]
+            other = other + dodge * max(0, args.dodge_repeat - 1)
             rng.shuffle(fwd)
             order = other + fwd[:len(other)]
         else:
             order = list(range(len(train)))
         rng.shuffle(order)
+        order = order[:n_epoch]
         run_loss = 0.0
         for bi in range(0, len(order), args.batch):
             idx = order[bi:bi + args.batch]
@@ -269,6 +314,8 @@ def main(argv: list[str] | None = None) -> int:
             best, best_key = ev, key
             save_checkpoint(agent, Path(args.out), args.base, {
                 "epochs_completed": epoch + 1, "steps": step, "train_n": len(train), "val_n": len(val),
+                "base": args.base, "epoch_examples": args.epoch_examples, "dodge_repeat": args.dodge_repeat,
+                "val_examples": args.val_examples,
                 "unfreeze_top": args.unfreeze_top, "lr": args.lr, "encoder_lr": args.encoder_lr,
                 "batch": args.batch, "seed": args.seed,
                 "val_before": before, "val_after": ev, "minutes": round((time.time() - t_start) / 60, 1),

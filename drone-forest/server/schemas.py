@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 4
 
 SPEED_MIN = 4.0
 """Metres per second: the slowest the drone will be asked to fly (a hover cannot progress)."""
@@ -49,7 +49,7 @@ class Action(str, Enum):
     BRAKE = "brake"
 
 
-ObstacleKind = Literal["tree", "rock", "bird", "ground", "wall"]
+ObstacleKind = Literal["tree", "rock", "bird", "ogre", "projectile", "ground", "wall"]
 
 
 class Vec3(BaseModel):
@@ -102,6 +102,7 @@ class SensorFrame(BaseModel):
     drone: DroneState
     rays: list[Ray] = Field(description=f"Exactly the {len(RAY_SPEC)} rays in RAY_SPEC, in order")
     nearest: Nearest | None = None
+    threat: Nearest | None = Field(None, description="Most urgent MOVING object (thrown rock, bird): least time-to-collision within 4 s; None when nothing is coming")
     bounds: Bounds = Field(default_factory=Bounds)
     last_action: Action | None = None
 

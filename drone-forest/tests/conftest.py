@@ -25,6 +25,7 @@ def make_frame(
     speed: float = 10.0,
     last_action: Action | None = None,
     nearest: Nearest | None = None,
+    threat: Nearest | None = None,
     bounds: Bounds | None = None,
 ) -> SensorFrame:
     """A frame with every ray clear except those in `distances` ({ray: (metres, kind)})."""
@@ -48,6 +49,7 @@ def make_frame(
         ),
         rays=rays,
         nearest=nearest,
+        threat=threat,
         bounds=bounds or Bounds(),
         last_action=last_action,
     )

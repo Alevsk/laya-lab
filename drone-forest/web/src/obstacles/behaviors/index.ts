@@ -6,6 +6,8 @@
  * Built-ins:
  *   StaticBehavior        scenery that never moves (trees, rocks)
  *   RandomWanderBehavior  piecewise-constant random flight inside the corridor (birds)
+ *   OgreThrowerBehavior   stand, face the drone, wind up, throw a rock at its predicted position (ogres)
+ *   BallisticBehavior     gravity + landing for anything thrown (rocks)
  *
  * Extension point — an AI-driven policy
  * ------------------------------------
@@ -34,3 +36,6 @@
  */
 export { StaticBehavior, STATIC_BEHAVIOR } from './static';
 export { RandomWanderBehavior, type RandomWanderOptions } from './random-wander';
+export { BallisticBehavior } from './ballistic';
+export { OgreThrowerBehavior, tuningFor as ogreTuningFor, type OgreTuning, type OgreThrowerOptions } from './ogre-thrower';
+export { solveLaunch, predictAimPoint, positionAt, perturbDirection, GRAVITY } from './ballistics';

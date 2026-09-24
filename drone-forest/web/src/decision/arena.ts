@@ -46,6 +46,8 @@ export interface ArenaResult {
   /** straight-line horizontal distance from the start, metres */
   displacement: number;
   collisions: number;
+  /** collisions split by what was hit (tree, rock, bird, ogre, projectile ...) */
+  collisions_by_kind: Record<string, number>;
   near_misses: number;
   ticks_met: number;
   ticks_missed: number;
@@ -153,6 +155,7 @@ export async function runArena(params: ArenaParams, deps: ArenaDeps): Promise<Ar
   let distance = 0;
   let speedSum = 0;
   let speedMax = 0;
+  const hitsByKind: Record<string, number> = {};
   const activeHits = new Set<number>();
   const activeNear = new Set<number>();
 
@@ -195,6 +198,7 @@ export async function runArena(params: ArenaParams, deps: ArenaDeps): Promise<Ar
       if (!activeHits.has(res.hit.id)) {
         activeHits.add(res.hit.id);
         collisions++;
+        hitsByKind[res.hit.kind] = (hitsByKind[res.hit.kind] ?? 0) + 1;
         event('collision', res.hit, { action: loop.current() });
         if (endless) endedBy = 'collision';   // an endless run is over at its first crash
       }
@@ -275,6 +279,7 @@ export async function runArena(params: ArenaParams, deps: ArenaDeps): Promise<Ar
     distance: round(distance),
     displacement: round(Math.sqrt(dx * dx + dz * dz)),
     collisions,
+    collisions_by_kind: hitsByKind,
     near_misses: nearMisses,
     ticks_met: ls.ticks_met,
     ticks_missed: ls.ticks_missed,

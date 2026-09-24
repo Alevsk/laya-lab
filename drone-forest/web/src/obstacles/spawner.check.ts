@@ -52,6 +52,10 @@ function run(seed: number): RunResult {
     rng,
     bounds: { altitude_min: 1, altitude_max: 30, speed_max: 18, half_width: HALF_WIDTH, corridor_length: 200 },
     drone: { position: new THREE.Vector3(0, 4, 0), velocity: new THREE.Vector3(), heading_deg: 0 },
+    difficulty: 3,
+    emit: (o) => {
+      obstacles.push(o);
+    },
   };
   const obstacles: Obstacle[] = [];
   const spawnedTotal: Record<string, number> = {};
@@ -112,7 +116,7 @@ function run(seed: number): RunResult {
         rowsSeen++;
       }
       for (const o of obstacles) {
-        if (o.kind === 'bird') continue;
+        if (o.kind === 'bird' || o.kind === 'projectile') continue; // moving / thrown things are not layout
         if (Math.abs(c.along(o.position) - row.along) > 3.5) continue; // rowSpacing/2 + jitter
         const clearance = Math.abs(c.across(o.position) - row.gapCentre) - o.radius - row.gapHalfWidth;
         minGapClearance = Math.min(minGapClearance, clearance);

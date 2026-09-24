@@ -1,0 +1,55 @@
+dataset: {'n': 80189, 'teacher_actions': {'forward': 56019, 'bank_right': 9315, 'bank_left': 9041, 'climb': 5353, 'brake': 291, 'descend': 170}, 'source_engines': {'heuristic': 64933, 'laya-ft': 7666, 'random': 4524, 'laya': 3066}, 'files': 11}
+train  : {'n': 64480, 'teacher_actions': {'forward': 45049, 'bank_right': 7372, 'bank_left': 7332, 'climb': 4369, 'brake': 228, 'descend': 130}, 'source_engines': {'heuristic': 52102, 'laya-ft': 5972, 'random': 3687, 'laya': 2719}, 'files': 11}
+val    : {'n': 1200, 'teacher_actions': {'forward': 400, 'bank_right': 315, 'bank_left': 290, 'climb': 180, 'brake': 9, 'descend': 6}, 'source_engines': {'heuristic': 881, 'laya-ft': 198, 'random': 100, 'laya': 21}, 'files': 9}
+/Users/alevsk/Development/laya/upstream/laya/agent.py:385: RuntimeWarning: laya: this checkpoint ships temperatures outside [0.5, 5] which would distort confidence; clamping choice:11+=0.1006. Treat confidence from the affected buckets as uncalibrated.
+  return Agent(model_id_or_path, device=device, token=token, subfolder=subfolder)
+device=mps trainable params=50.8M (encoder frozen except top 2)
+val BEFORE: {"n": 1200, "agree": 0.63, "danger_n": 800, "danger_agree": 0.535, "danger_forward": 0.2825, "rock_n": 400, "rock_agree": 0.5925, "collision_acc": 0.625, "urgency_acc": 0.6133333333333333, "speed_acc": 0.5991666666666666, "hist": {"forward": 554, "bank_left": 311, "bank_right": 280, "climb": 47, "descend": 5, "brake": 3}}
+train danger frames 19431, of which rock dodges 3119 (x3)
+  epoch 1 step 25/1000 loss 0.716 lr 8.45e-05 83s
+  epoch 1 step 50/1000 loss 0.707 lr 9.50e-05 160s
+  epoch 1 step 75/1000 loss 0.775 lr 9.25e-05 235s
+  epoch 1 step 100/1000 loss 0.692 lr 9.00e-05 311s
+  epoch 1 step 125/1000 loss 0.667 lr 8.75e-05 386s
+  epoch 1 step 150/1000 loss 0.617 lr 8.50e-05 460s
+  epoch 1 step 175/1000 loss 0.621 lr 8.25e-05 536s
+  epoch 1 step 200/1000 loss 0.637 lr 8.00e-05 616s
+  epoch 1 step 225/1000 loss 0.645 lr 7.75e-05 694s
+  epoch 1 step 250/1000 loss 0.637 lr 7.50e-05 770s
+  epoch 1 step 275/1000 loss 0.605 lr 7.25e-05 845s
+  epoch 1 step 300/1000 loss 0.628 lr 7.00e-05 921s
+  epoch 1 step 325/1000 loss 0.640 lr 6.75e-05 997s
+  epoch 1 step 350/1000 loss 0.673 lr 6.50e-05 1075s
+  epoch 1 step 375/1000 loss 0.550 lr 6.25e-05 1150s
+  epoch 1 step 400/1000 loss 0.646 lr 6.00e-05 1226s
+  epoch 1 step 425/1000 loss 0.559 lr 5.75e-05 1301s
+  epoch 1 step 450/1000 loss 0.607 lr 5.50e-05 1376s
+  epoch 1 step 475/1000 loss 0.630 lr 5.25e-05 1449s
+  epoch 1 step 500/1000 loss 0.581 lr 5.00e-05 1523s
+val after epoch 1: {"n": 1200, "agree": 0.6591666666666667, "danger_n": 800, "danger_agree": 0.5625, "danger_forward": 0.2975, "rock_n": 400, "rock_agree": 0.6275, "collision_acc": 0.8383333333333334, "urgency_acc": 0.7491666666666666, "speed_acc": 0.7383333333333333, "hist": {"forward": 579, "bank_left": 271, "bank_right": 252, "climb": 89, "descend": 8, "brake": 1}}
+  saved best -> data/checkpoints/laya-drone-ft-v3
+  epoch 2 step 525/1000 loss 0.555 lr 4.75e-05 1829s
+  epoch 2 step 550/1000 loss 0.612 lr 4.50e-05 1908s
+  epoch 2 step 575/1000 loss 0.591 lr 4.25e-05 1988s
+  epoch 2 step 600/1000 loss 0.532 lr 4.00e-05 2070s
+  epoch 2 step 625/1000 loss 0.502 lr 3.75e-05 2149s
+  epoch 2 step 650/1000 loss 0.532 lr 3.50e-05 2229s
+  epoch 2 step 675/1000 loss 0.537 lr 3.25e-05 2308s
+  epoch 2 step 700/1000 loss 0.563 lr 3.00e-05 2391s
+  epoch 2 step 725/1000 loss 0.564 lr 2.75e-05 2476s
+  epoch 2 step 750/1000 loss 0.533 lr 2.50e-05 2554s
+  epoch 2 step 775/1000 loss 0.598 lr 2.25e-05 2635s
+  epoch 2 step 800/1000 loss 0.504 lr 2.00e-05 2717s
+  epoch 2 step 825/1000 loss 0.621 lr 1.75e-05 2797s
+  epoch 2 step 850/1000 loss 0.512 lr 1.50e-05 2876s
+  epoch 2 step 875/1000 loss 0.579 lr 1.25e-05 2957s
+  epoch 2 step 900/1000 loss 0.562 lr 1.00e-05 3036s
+  epoch 2 step 925/1000 loss 0.580 lr 7.50e-06 3119s
+  epoch 2 step 950/1000 loss 0.554 lr 5.00e-06 3200s
+  epoch 2 step 975/1000 loss 0.513 lr 5.00e-06 3280s
+  epoch 2 step 1000/1000 loss 0.513 lr 5.00e-06 3364s
+val after epoch 2: {"n": 1200, "agree": 0.6833333333333333, "danger_n": 800, "danger_agree": 0.5975, "danger_forward": 0.2575, "rock_n": 400, "rock_agree": 0.6575, "collision_acc": 0.8691666666666666, "urgency_acc": 0.7733333333333333, "speed_acc": 0.7791666666666667, "hist": {"forward": 548, "bank_left": 272, "bank_right": 256, "climb": 114, "descend": 9, "brake": 1}}
+  saved best -> data/checkpoints/laya-drone-ft-v3
+
+BEST val: {"n": 1200, "agree": 0.6833333333333333, "danger_n": 800, "danger_agree": 0.5975, "danger_forward": 0.2575, "rock_n": 400, "rock_agree": 0.6575, "collision_acc": 0.8691666666666666, "urgency_acc": 0.7733333333333333, "speed_acc": 0.7791666666666667, "hist": {"forward": 548, "bank_left": 272, "bank_right": 256, "climb": 114, "descend": 9, "brake": 1}}
+BEFORE  : {"n": 1200, "agree": 0.63, "danger_n": 800, "danger_agree": 0.535, "danger_forward": 0.2825, "rock_n": 400, "rock_agree": 0.5925, "collision_acc": 0.625, "urgency_acc": 0.6133333333333333, "speed_acc": 0.5991666666666666, "hist": {"forward": 554, "bank_left": 311, "bank_right": 280, "climb": 47, "descend": 5, "brake": 3}}

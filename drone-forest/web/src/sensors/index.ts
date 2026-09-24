@@ -12,10 +12,10 @@ import type * as THREE from 'three';
 import { RAY_MAX_RANGE } from '../core/rays';
 import { PROTOCOL_VERSION } from '../core/types';
 import type { ActionName, Obstacle, SensorFrame, WorldContext } from '../core/types';
-import { castFan, headingToBasis, nearestObstacle } from './raycast';
+import { castFan, headingToBasis, mostUrgentThreat, nearestObstacle } from './raycast';
 import type { Basis } from './raycast';
 
-export { castFan, headingToBasis, nearestObstacle, rayDirection, raySphere, rayPlaneX, rayPlaneY } from './raycast';
+export { castFan, headingToBasis, mostUrgentThreat, nearestObstacle, rayDirection, raySphere, rayPlaneX, rayPlaneY } from './raycast';
 export type { Basis, SphereLike } from './raycast';
 export { createRayDebug, RAY_HIT_COLORS } from './debug';
 export type { RayDebug } from './debug';
@@ -81,6 +81,7 @@ export function createSensors(world: SensorWorld, drone: SensorDrone, opts: Sens
       },
       rays: castFan(origin, basis, world.obstacles, bounds, maxRange, sideWalls ? world.ctx.bounds.half_width : undefined),
       nearest: nearestObstacle(origin, velocity, basis, world.obstacles),
+      threat: mostUrgentThreat(origin, velocity, basis, world.obstacles),
       bounds,
       last_action: lastAction,
     };

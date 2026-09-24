@@ -16,6 +16,8 @@ export const RAY_HIT_COLORS: Record<ObstacleKind | 'clear', number> = {
   bird: 0xffe94d,
   ground: 0x4aa3ff,
   wall: 0xe040fb,
+  ogre: 0x9bd35c,
+  projectile: 0xff8a3d,
 };
 
 export interface RayDebug {

@@ -46,6 +46,8 @@ export interface WorldOptions {
   seed: number;
   /** Where obstacles come from. Omit for an empty corridor (useful when testing the scene alone). */
   spawner?: Spawner;
+  /** difficulty preset 1..5 exposed to behaviours through the context */
+  difficulty?: number;
   bounds?: Partial<WorldBounds>;
 }
 
@@ -77,6 +79,8 @@ export interface World {
   flash(): void;
   /** Clear every obstacle and rebuild the terrain around the followed target. */
   reset(opts?: ResetOptions): void;
+  /** Change the difficulty behaviours see (ogres read it live); the spawner is swapped separately. */
+  setDifficulty(level: number): void;
   dispose(): void;
 }
 
@@ -119,6 +123,8 @@ export function createWorld(opts: WorldOptions): World {
     rng,
     bounds,
     drone: { position: new THREE.Vector3(0, 8, 0), velocity: new THREE.Vector3(), heading_deg: 0 },
+    difficulty: opts.difficulty ?? 3,
+    emit: (o) => add(o),
   };
 
   let target: FollowTarget | null = null;
@@ -216,6 +222,9 @@ export function createWorld(opts: WorldOptions): World {
     renderer,
     ctx,
     obstacles,
+    setDifficulty(level) {
+      ctx.difficulty = level;
+    },
     get rng() {
       return rng;
     },

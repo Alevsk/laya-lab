@@ -176,13 +176,24 @@ export function createSpawner(rng: Rng, factories?: ObstacleFactory[], options: 
     return Math.min(count, Math.max(0, profile.maxCount - live));
   };
 
-  const spawnRow = (ctx: WorldContext, obstacles: Obstacle[], along: number, span: number, d: number): Obstacle[] => {
+  const spawnRow = (
+    ctx: WorldContext,
+    obstacles: Obstacle[],
+    along: number,
+    span: number,
+    d: number,
+    spawnedThisUpdate: readonly Obstacle[],
+  ): Obstacle[] => {
     const hw = ctx.bounds.half_width;
     const gapHalf = o.clearGap[0] + (o.clearGap[1] - o.clearGap[0]) * d;
     gapCentre = clamp(gapCentre + rng.range(-o.gapDrift, o.gapDrift), -hw + gapHalf, hw - gapHalf);
     rows.push({ along, gapCentre, gapHalfWidth: gapHalf });
 
+    // Caps must count what earlier rows of THIS update produced too: the world only appends
+    // returned obstacles after `update` returns, so `obstacles` alone under-counts by up to a
+    // whole update's worth of rows and a kind could overshoot its cap.
     const counts = countByKind(obstacles);
+    for (const o of spawnedThisUpdate) counts.set(o.kind, (counts.get(o.kind) ?? 0) + 1);
     const spawned: Obstacle[] = [];
     for (const { factory, profile } of kinds) {
       const wanted = rowCount(profile, ctx, span, d, counts.get(factory.kind) ?? 0);
@@ -195,6 +206,7 @@ export function createSpawner(rng: Rng, factories?: ObstacleFactory[], options: 
           if (profile.respectsGap && Math.abs(across - gapCentre) < gapHalf + radius) continue;
           if (tooClose(obstacles, rowAlong, across, radius, profile.minSpacing)) continue;
           if (tooClose(spawned, rowAlong, across, radius, profile.minSpacing)) continue;
+          if (tooClose(spawnedThisUpdate, rowAlong, across, radius, profile.minSpacing)) continue;
           const [altMin, altMax] = profile.altitude ?? [ctx.bounds.altitude_min, ctx.bounds.altitude_max];
           const height = profile.layer === 'air' ? rng.range(altMin, altMax) : 0;
           c.compose(rowAlong, across, height, anchor);
@@ -238,7 +250,7 @@ export function createSpawner(rng: Rng, factories?: ObstacleFactory[], options: 
 
       const spawned: Obstacle[] = [];
       for (let n = 0; n < MAX_ROWS_PER_UPDATE && nextRowAlong <= droneAlong + horizon; n++) {
-        spawned.push(...spawnRow(ctx, obstacles, nextRowAlong, span, d));
+        spawned.push(...spawnRow(ctx, obstacles, nextRowAlong, span, d, spawned));
         nextRowAlong += o.rowSpacing;
       }
       return spawned;

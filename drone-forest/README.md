@@ -67,10 +67,12 @@ make dev        # service on :8765 in the background, game on :5173 in the foreg
 # or separately:
 make serve      # uvicorn server.app:app --host 127.0.0.1 --port 8765
 make web        # vite dev server
-make test       # pytest (71 tests; the Laya ones skip when the checkpoint is not cached)
+make test       # pytest (88 tests; the Laya ones skip when the checkpoint is not cached)
 make lint       # ruff + tsc
 make build      # production bundle in web/dist
 make arena      # prints the benchmark URLs
+make evaluate   # prints the ONE URL that runs the whole evaluation matrix (engines x levels x seeds x modes)
+make scoreboard # aggregates every recorded arena result into the good-and-fast table
 make telemetry  # summarises the newest data/telemetry-*.jsonl
 make clean
 ```
@@ -146,6 +148,67 @@ Measured with the heuristic engine, quality arena, 45 s, 16 seeds per level:
 seed-115 forest went from 546 m to **708 m** in 45 s at one collision. Collisions barely rise with
 level because the heuristic slows down; near-misses and banking are where the difficulty shows.
 
+### Ogres (protocol 3)
+
+Brute ogres stand on the ground and throw rocks at the drone. They are the first *hostile*
+obstacle, and they were added entirely through the extension seam: `factories/ogre.ts` (the
+creature and its `SpawnProfile`), `factories/projectile.ts` (the thrown rock),
+`behaviors/ogre-thrower.ts` (when and how to throw) and `behaviors/ballistic.ts` (gravity and
+landing) — plus one `registerFactory` line. Two additive fields on `WorldContext` made it
+possible: `difficulty`, so a behaviour can scale itself live, and `emit(obstacle)`, so a
+behaviour can put something new into the world mid-flight. The sensor contract gained the kinds
+`ogre` and `projectile`; Laya's prompt calls them *an ogre* and *a thrown rock*.
+
+An ogre faces the drone, and when it is inside range (but never closer than 14 m — a
+point-blank rock is undodgeable) it winds up (the arm goes back, a telegraph both the sensors and
+a human can see) and releases a rock at where the drone is *going to be*: a closed-form
+low-arc ballistic solution (`behaviors/ballistics.ts`, unit-checked) with the intercept point
+iterated for the drone's velocity. Everything that makes it dangerous scales with the level:
+
+| level | range | throw every | rock speed | aim error | lead |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 35 m | 5.0 s | 12 m/s | 12° | 0 (aims at where you are) |
+| 3 | 50 m | 3.7 s | 17 m/s | 7.5° | 0.43 |
+| 5 | 65 m | 2.4 s | 22 m/s | 3° | 0.85 (aims at where you will be) |
+
+The spawner's per-level density scaling applies on top, so level 5 fields roughly three times as
+many ogres as level 1 (capped at four alive).
+
+Two things had to change for rocks to be *dodgeable* rather than merely visible:
+
+* **`nearest` now ranks by time-to-collision, not distance.** A rock 20 m out closing at 30 m/s
+  (0.7 s away) matters more than a tree 10 m out at 12 m/s (0.8 s). `distance`, `bearing`,
+  `elevation` and `closing_speed` mean what they always did; only *which* obstacle is reported
+  changed. Static scenery still wins whenever nothing is closing faster than the drone itself.
+* **The heuristic dodges.** When `nearest.kind` is `projectile` and it is closing inside a 2 s
+  window, the escape directions get a bonus (up if it comes from below, sideways away from its
+  bearing) and `forward` a penalty. It is keyed on the *kind*: an earlier version keyed on closing
+  speed treated every tree approached at full throttle as a rock and flew the whole forest weaving
+  at 9 m/s — measured, and fixed.
+
+The HUD shows **rock hits** separately; arena results carry `collisions_by_kind`.
+
+Measured (quality arena, 45 s, seeds 7–9, this build):
+
+| engine | level | collisions | of which rocks | near-misses | distance | mean speed |
+|---|---:|---:|---:|---:|---:|---:|
+| heuristic (dodges) | 3 | 0, 0, 0 | 0 | 2, 3, 1 | 746 / 679 / 731 m | 15.1–16.6 m/s |
+| heuristic (dodges) | 5 | 0, 0, 0 | 0 | 6, 1, 3 | 698 / 686 / 685 m | 15.2–15.5 m/s |
+| `laya-ft` (v2) | 5 | **3** | **3** | 6 | 411 m | 9.2 m/s |
+
+The reference pilot survives level 5 at full pace by climbing and banking out of the way (climbs
+per run went from ~2 to 6–17). The fine-tuned model does not: every one of its collisions was a
+rock, none a tree — it was trained on telemetry recorded before ogres existed, from a teacher
+that could not dodge, so there is nothing in its data about incoming objects. That is the point
+of the ogres: a hazard the current checkpoint measurably cannot handle, and a clean next
+experiment — collect again with the dodging teacher, fine-tune, and see whether the `Incoming:`
+line in the prompt is enough for it to learn to climb.
+
+Balance history, since it is easy to get wrong: the first tuning (26 m/s rocks, 1° error, full
+lead, 1.6 s cadence) hit the *heuristic* five times in 42 s — impossible. The first dodge, keyed
+on closing speed, made every tree approached at full throttle look like a rock and the drone flew
+level 5 weaving at 9 m/s. The current numbers are the third iteration.
+
 ### Engine-recommended speed (protocol 2)
 
 Every `Decision` may carry `target_speed` (m/s, in `[SPEED_MIN=4, bounds.speed_max=18]`), and
@@ -171,6 +234,8 @@ results panel stacks directly under the decision-engine panel, so it never overl
 other panels or covers the drone; `A` dismisses it.
 
 ![arena results stacked under the engine panel, drone visible](docs/screenshot-arena-panel-docked.png)
+
+![laya-ft at level 5 with the incoming-threat row lit](docs/screenshot-ogres.png)
 
 ## The wire protocol
 
@@ -215,6 +280,160 @@ as a policy; `option_index` records where the chosen option was. The engine retu
 argmax and nothing else: it never imports the heuristic, applies no safety override, and does
 not re-rank. `FRAMING=numeric` sends the raw metres instead, for A/B comparison. All six
 options fit in 80 of the 192 head tokens (checked by a test).
+
+## Evaluation protocol: how good and how fast is Laya?
+
+The simulator exists to answer one question — *can Laya, as the decision engine, fly the drone
+through the forest, past the birds and the ogres' rocks, and how fast can it decide?* — and this
+protocol is how it is answered. Everything else in this README (the play mode, the HUD, the
+difficulty levels) exists to make the runs believable and repeatable.
+
+**Two axes, measured separately.**
+
+- *Good* — quality-mode arena: the world is stepped at a fixed 1/60 s and every decision is
+  awaited, so latency cannot cost the engine a single tick. What is left is the policy: how many
+  collisions per run, how many of them are thrown rocks, near-misses, distance flown and the
+  speed the engine chose. Same seeds, same forests, same ogres for every engine.
+- *Fast* — realtime-mode arena on the same seeds: the wall clock runs, decisions are asked at
+  10 Hz; a request whose answer arrives inside its 100 ms slot is *met*, one that arrives
+  later is *missed* (it is still applied when it lands — nothing is queued — and slots that pass
+  while a request is in flight are counted separately as skipped). `ticks met` is met / (met +
+  missed). An engine that decides well but slowly shows up here as missed ticks and a worse
+  outcome than its own quality-mode row. `think p50` is the engine's own synchronised inference
+  time.
+
+**One URL runs the whole matrix.** `make evaluate` prints it (engines × levels × seeds × modes,
+defaults `EVAL_ENGINES=heuristic,laya,laya-ft,random EVAL_LEVELS=3,5 EVAL_SEEDS=7-8
+EVAL_SECONDS=45`); the page runs each cell, reports its `ARENA_RESULT` to the service as a
+`score` event and reloads itself with the next combination (`web/src/decision/matrix.ts`, seed
+innermost, then level, engine, mode) until it logs `ARENA_MATRIX_DONE`. Leave the tab alone while
+it runs — realtime cells are timing measurements. `make scoreboard` then aggregates every
+recorded result per (mode, engine, level); re-running a cell replaces its earlier result, so
+the table always reflects the latest build. The heuristic is the ceiling (it is the teacher,
+and it sees the same frame), `random` the floor.
+
+### Scoreboard, build 1: `laya-ft` v2 (trained before ogres existed)
+
+Measured 2026-09-24 on an Apple M4 Max (MPS), headless Chromium via Playwright, GPU otherwise
+idle. 45 simulated seconds per cell, 10 Hz decisions, difficulty 3 and 5, seeds 7–8 — two seeds
+per cell, so read the columns as a smoke test of each engine, not a benchmark with error bars
+(`EVAL_SEEDS=7-16` is the same protocol with ten). `think p50` is the engine's own synchronised
+inference time; `ticks met` only means something in realtime mode.
+
+| mode | engine | level | runs | collisions/run | rock hits/run | near-misses/run | distance | speed | ticks met | think p50 |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| quality | `heuristic` | 3 | 9 | 0.33 | 0.00 | 3.8 | 915 m | 16.1 m/s | 100% | 0 ms |
+| quality | `heuristic` | 5 | 2 | 0.00 | 0.00 | 3.5 | 692 m | 15.4 m/s | 100% | 0 ms |
+| quality | `laya` | 3 | 2 | 1.00 | 0.00 | 5.5 | 582 m | 12.9 m/s | 100% | 87 ms |
+| quality | `laya` | 5 | 2 | 2.50 | 0.00 | 16.0 | 599 m | 13.3 m/s | 100% | 143 ms |
+| quality | `laya-ft` | 3 | 2 | 1.50 | 0.00 | 5.0 | 411 m | 9.2 m/s | 100% | 125 ms |
+| quality | `laya-ft` | 5 | 2 | 2.00 | 2.00 | 6.0 | 415 m | 9.2 m/s | 100% | 123 ms |
+| quality | `random` | 3 | 2 | 3.50 | 0.00 | 9.0 | 452 m | 10.1 m/s | 100% | 0 ms |
+| quality | `random` | 5 | 2 | 8.50 | 1.50 | 36.0 | 452 m | 10.1 m/s | 100% | 0 ms |
+| realtime | `heuristic` | 3 | 2 | 0.00 | 0.00 | 0.5 | 718 m | 16.0 m/s | 100% | 0 ms |
+| realtime | `heuristic` | 5 | 2 | 1.00 | 0.00 | 10.0 | 669 m | 14.9 m/s | 100% | 0 ms |
+| realtime | `laya` | 3 | 2 | 1.00 | 0.00 | 9.5 | 590 m | 13.1 m/s | 93% | 89 ms |
+| realtime | `laya` | 5 | 2 | 3.50 | 1.50 | 14.5 | 592 m | 13.2 m/s | 24% | 150 ms |
+| realtime | `laya-ft` | 3 | 2 | 0.00 | 0.00 | 5.5 | 364 m | 8.1 m/s | 0% | 173 ms |
+| realtime | `laya-ft` | 5 | 2 | 1.00 | 0.00 | 6.5 | 376 m | 8.4 m/s | 1% | 130 ms |
+| realtime | `random` | 3 | 2 | 6.50 | 0.50 | 23.5 | 448 m | 10.0 m/s | 100% | 0 ms |
+| realtime | `random` | 5 | 2 | 9.00 | 0.00 | 26.5 | 446 m | 10.0 m/s | 100% | 0 ms |
+
+What it says, in order of importance:
+
+- **Good — trees.** The fine-tune reads the forest: at level 3 `laya-ft` v2 hits nothing in
+  realtime mode and 1.5 things per run in quality mode, between zero-shot Laya (1.0) and random
+  (3.5); at level 5 it hits 2.0 per run against zero-shot 2.5 and random 8.5. The heuristic
+  it was taught by hits 0.0 on the same seeds, so the gap to the teacher is still wide.
+- **Good — rocks.** Every level-5 quality-mode collision of `laya-ft` v2 is a thrown rock
+  (2.0 rock hits/run) while zero-shot Laya, which cannot dodge either, took 0.0: v2 flies low
+  and slow (9.2 m/s versus 13–15) and the ogres' lead-aimed throws are easiest against exactly
+  that. v2 was trained on 23.6k frames recorded **before ogres existed** — it has never seen an
+  `Incoming: a thrown rock` line. That is the next fine-tune's job (v3, below), and it is why
+  the training set is collected with the dodging teacher at levels 3–5.
+- **Fast.** Laya's think time is 87 ms p50 at level 3 and 143–150 ms at level 5, because the
+  prompt grows with the scene (more rays report hits, the incoming-object line appears). At the
+  10 Hz the drone asks, that is 93% of ticks met at level 3 and 24% at level 5 for zero-shot
+  Laya, and 0–1% for `laya-ft`. The `laya-ft` latencies in this first table (123–173 ms) are
+  inflated: on identical frames the two checkpoints measure the same to within 1 ms through
+  `/decide` (94.1 vs 93.6 ms on a level-5 frame), and the difference came from CPU work this
+  author ran on the same machine during those cells — the build-2 table below was taken with
+  the machine quiet. A decision that misses its slot is still applied when it arrives, so the
+  realtime rows degrade gracefully rather than collapse — but on this GPU Laya is a 7–11 Hz
+  pilot, not a 10 Hz one, and the honest way to run it faster is a shorter prompt or a smaller
+  checkpoint, not a faster loop.
+- **Speed choice.** The heuristic cruises at 15–16 m/s; `laya-ft` v2 picks 8–9 m/s. Its speed
+  answers agree with the teacher on 82% of validation frames, but the 18% it gets wrong are the
+  "go fast, it is clear" frames, and a slow drone is what makes rocks land.
+
+### Scoreboard, build 2: `laya-ft` v3 (trained on the world it is tested in)
+
+Same protocol, same seeds, same 45 s. The `heuristic` and `random` rows are build 1's (they do
+not use the GPU and their decisions do not depend on the checkpoint); the `laya` and `laya-ft`
+rows were re-run with v3 in the `laya-ft` slot. Zero-shot `laya` makes identical decisions to
+build 1 in quality mode — the protocol is deterministic — which is the check that the two
+tables are comparable.
+
+| mode | engine | level | runs | collisions/run | rock hits/run | near-misses/run | distance | speed | ticks met | think p50 |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| quality | `heuristic` | 3 | 2 | 0.00 | 0.00 | 2.5 | 713 m | 15.9 m/s | 100% | 0 ms |
+| quality | `heuristic` | 5 | 2 | 0.00 | 0.00 | 3.5 | 692 m | 15.4 m/s | 100% | 0 ms |
+| quality | `laya` | 3 | 2 | 1.00 | 0.00 | 5.5 | 582 m | 12.9 m/s | 100% | 109 ms |
+| quality | `laya` | 5 | 2 | 2.50 | 0.00 | 16.0 | 599 m | 13.3 m/s | 100% | 125 ms |
+| quality | `laya-ft` | 3 | 2 | 1.00 | 0.00 | 8.5 | 612 m | 13.6 m/s | 100% | 125 ms |
+| quality | `laya-ft` | 5 | 2 | 2.50 | 1.50 | 10.5 | 611 m | 13.6 m/s | 100% | 127 ms |
+| quality | `random` | 3 | 2 | 3.50 | 0.00 | 9.0 | 452 m | 10.1 m/s | 100% | 0 ms |
+| quality | `random` | 5 | 2 | 8.50 | 1.50 | 36.0 | 452 m | 10.1 m/s | 100% | 0 ms |
+| realtime | `heuristic` | 3 | 2 | 0.00 | 0.00 | 0.5 | 718 m | 16.0 m/s | 100% | 0 ms |
+| realtime | `heuristic` | 5 | 2 | 1.00 | 0.00 | 10.0 | 669 m | 14.9 m/s | 100% | 0 ms |
+| realtime | `laya` | 3 | 2 | 2.50 | 0.00 | 11.0 | 595 m | 13.2 m/s | 97% | 87 ms |
+| realtime | `laya` | 5 | 2 | 2.50 | 1.00 | 11.5 | 581 m | 12.9 m/s | 23% | 192 ms |
+| realtime | `laya-ft` | 3 | 2 | 0.50 | 0.00 | 2.5 | 630 m | 14.1 m/s | 0% | 192 ms |
+| realtime | `laya-ft` | 5 | 2 | 3.00 | 1.00 | 11.0 | 558 m | 12.5 m/s | 0% | 125 ms |
+| realtime | `random` | 3 | 2 | 6.50 | 0.50 | 23.5 | 448 m | 10.0 m/s | 100% | 0 ms |
+| realtime | `random` | 5 | 2 | 9.00 | 0.00 | 26.5 | 446 m | 10.0 m/s | 100% | 0 ms |
+
+What changed, and what did not:
+
+- **Speed.** v3 chose 13.6 m/s where v2 chose 9.2, and flew 611 m per run where v2 flew 411 —
+  50% faster and 50% further, at the heuristic's 15.5 m/s minus a margin. That is the speed
+  question's 0.60 → 0.78 agreement showing up as flight.
+- **Trees.** 1.0 collisions per run at level 3 in quality mode (v2: 1.5, zero-shot: 1.0,
+  heuristic: 0.0) and 0.5 in realtime; at level 5, 1.0 tree per run (v2: 0.0, but v2 was
+  crawling through the dense band at 9 m/s).
+- **Rocks.** Level-5 rock hits went 2.0 → 1.5 per run in quality mode and 2.0 → 1.0 in realtime
+  — while flying 50% faster, which the ogres' lead-aimed throws punish less. v3 has now seen
+  3,119 teacher dodges (tripled in training) and agrees with the teacher on 66% of held-out
+  dodge frames (v2: 59%); it dodges *more* than v2, not yet *reliably*. The teacher takes 0.0
+  rock hits on the same seeds.
+- **Net.** At level 5 in quality mode v3's total is 2.5 collisions per run against v2's 2.0 —
+  the trade is one tree for half a rock and a much faster, longer flight. A fine-tune that
+  moves the steering question from 0.54 to 0.60 agreement moves the arena this much; closing the
+  gap to the heuristic (0.0) needs the steering question to move a lot further, and the honest
+  finding of three fine-tunes is that the state-reading questions learn in an epoch and the
+  6-way steering choice learns slowly.
+- **Fast, measured on a loaded machine.** During the build-2 realtime cells the machine's
+  1-minute load average was 4–8 with excursions to 94 from a Time Machine backup and a
+  container VM outside this project (sampled every 30 s during the run). The three cells that
+  ran at load < 6 — zero-shot `laya` level 3 seeds 7–8 and level 5 seed 7 — measured 83, 91
+  and 101 ms think p50 and met 99%, 94% and 33% of their 10 Hz slots; the cells that ran through
+  the spike measured 114–284 ms and met almost none. The same level-5 frame measured 94 ms
+  through `/decide` with the machine quiet and 164 ms at load 15. Read the realtime rows with
+  that in mind: on this GPU, quiet, Laya answers this prompt in 85–125 ms depending on how much
+  of the scene is occupied, so it is a 8–12 Hz decision engine at level 3 and slips under
+  10 Hz at level 5. A missed slot is not a lost decision (it is applied when it arrives), which
+  is why the realtime outcomes stay close to the quality-mode ones.
+
+**Bottom line for the question the simulator was built to answer.** Laya *can* fly the drone
+autonomously in this world once fine-tuned on it — v3 completes every 45 s run at 13–14 m/s,
+covers 600 m and takes 1–2.5 collisions per run where random takes 3.5–9 and the teacher
+takes 0 — and it decides in ~90–125 ms per frame on an M4 Max, which is at the edge of a 10 Hz
+loop. What it is *not yet* is safe: it hits a tree a run and is still hit by rocks at level 5.
+Every number above comes from `make evaluate` + `make scoreboard` and can be reproduced,
+extended to more seeds (`EVAL_SEEDS=7-16`) or re-run after the next fine-tune with the same
+two commands.
+
+<!-- SCOREBOARD-V3 -->
 
 ## Arena: the numbers
 
@@ -371,9 +590,12 @@ them land near chance on the frames that matter). That is what upstream says too
 checkpoints are a base to fine-tune. The simulator is built to close that loop:
 
 1. **Collect.** `make serve`, `make web`, then open the chained arena URL (`make collect` prints
-   it). With the GPU free the quality arena runs 45 simulated seconds in about a second, so 16
-   seeds at a difficulty level take under a minute and yield ~7,000 teacher-labelled frames.
-   Collect across levels 3–5 so the dataset has danger in it.
+   it): the heuristic flies 24 seeds × levels 3, 4 and 5 × 60 s in quality mode. With the GPU
+   free that is about a second per run, so the 72 runs take a few minutes and yield ~40,000
+   teacher-flown frames with ogres and thrown rocks in them (the `Incoming:` line, and the
+   teacher's dodges). Add a few `engine=laya-ft` runs on the same URL shape afterwards: frames
+   from the student's own flight path (slow, weaving, in the dense band) are relabelled by the
+   teacher, which is the DAgger-style correction a purely teacher-flown dataset lacks.
 2. **Label.** `server/dataset.py` re-runs the heuristic on every recorded frame, whoever was
    flying, so frames Laya crashed on get the same consistent label. Exact duplicates collapse.
    A label-ceiling check (identical prompt → majority label) puts the best any text-reader can do
@@ -384,7 +606,14 @@ checkpoints are a base to fine-tune. The simulator is built to close that loop:
    sampling (each epoch is half danger frames); a block-wise train/val split so neighbouring
    frames never straddle it; the encoder frozen by default (`FINETUNE_ARGS="--unfreeze-top 2"`
    trains the top encoder layers at a lower learning rate); best epoch saved atomically in
-   laya's own checkpoint layout.
+   laya's own checkpoint layout. Big datasets are kept affordable with `--epoch-examples N`
+   (cap the balanced epoch so the schedule and the wall clock stay predictable) and
+   `--val-examples N` (a capped validation set that keeps every rock-dodge frame first, then
+   other danger frames, then forward); `--dodge-repeat K` oversamples the rare frames where the
+   teacher dodges a thrown rock; `--base data/checkpoints/<dir>` continues from an earlier
+   fine-tune instead of the stock checkpoint, and the lineage is recorded in the checkpoint's
+   `fine_tuned_from`. The validation report carries a `rock_agree` slice — agreement with the
+   teacher on exactly those dodge frames — so "did it learn to dodge" is a number, not a feeling.
 4. **Serve.** The `laya-ft` engine is the unchanged `LayaEngine` pointed at that checkpoint —
    one module, one registration line — so an arena difference between `laya` and `laya-ft` is
    the fine-tune and nothing else.
@@ -399,6 +628,26 @@ frames where it does *not* say forward):
 | v2: top-2 encoder layers, 23.6k frames, 3 epochs | 0.42 | 0.27 |
 
 v1 made things worse — a frozen encoder plus a small stale dataset drifted toward `forward`.
+
+v3 continued from v2 (`--base data/checkpoints/laya-drone-ft`) on 80,189 frames — the v2 data
+plus 72 teacher-flown runs at levels 3–5 with ogres and 9 `laya-ft` v2 student runs — with the
+rock-dodge frames tripled (`--dodge-repeat 3`), 2 capped epochs of 6,000 balanced examples
+(1,000 steps, 60 minutes on the M4 Max) and a 1,200-frame validation set that keeps every
+rock-dodge frame (400) and 400 other danger frames, so it is a *harder* validation set than
+v2's, not a comparable one. On it, before → after:
+
+| question (v3 validation set, 800 of 1,200 frames are danger frames) | v2 | v3 |
+|---|---:|---:|
+| move — agreement with the teacher on danger frames | 0.535 | **0.598** |
+| move — agreement on the 400 frames where the teacher dodges a thrown rock | 0.59 | **0.66** |
+| move — says `forward` on danger frames (lower is better) | 0.28 | **0.26** |
+| collision imminent (yes/no) | 0.63 | **0.87** |
+| urgency (4 levels) | 0.61 | **0.77** |
+| speed (4 levels) | 0.60 | **0.78** |
+
+The same shape again: the state-reading questions recover quickly on the new distribution, the
+steering question moves a few points. The arena is the test that matters (*Evaluation
+protocol*, build 2).
 
 v2 (top 2 encoder layers unfrozen, 23,602 frames across difficulty levels 3–5, ~114 minutes on
 the M4 Max) shows exactly where a supervised fine-tune bites and where it does not. On the

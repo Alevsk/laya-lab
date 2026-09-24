@@ -43,6 +43,7 @@ import {
 } from './decision';
 import { createChaseRig, createDrone, type CameraMode } from './drone';
 import { createHud } from './hud';
+import { matrixProgress, nextMatrixUrl } from './decision/matrix';
 import { createSpawner, defaultFactories } from './obstacles';
 import { createRayDebug, createSensors } from './sensors';
 import { createWorld, DEFAULT_BOUNDS, type WorldBounds } from './world';
@@ -62,8 +63,6 @@ interface RunConfig {
   /** obstacle difficulty preset 1..5 */
   difficulty: number;
   arena: ArenaParams | null;
-  /** last seed of a `seeds=A-B` chain, or null when not chaining */
-  seedsEnd: number | null;
 }
 
 const CORRIDORS: Record<CorridorName, Partial<WorldBounds>> = {
@@ -102,22 +101,9 @@ function readConfig(): RunConfig {
     seconds: Math.max(0, num('seconds', 0)),
     server: q.get('server') ?? 'ws://127.0.0.1:8765/ws',
     arena: arena ? { ...arena, engine: engine && ENGINES.includes(engine) ? engine : 'heuristic', seed: num('seed', 1) >>> 0, difficulty } : null,
-    seedsEnd: parseSeedsEnd(q.get('seeds')),
   };
 }
 
-/**
- * `seeds=100-115` chains arena runs: when a run finishes and `seed` is below the end of the
- * range, the page reloads itself with `seed+1`. One navigation therefore collects a whole
- * batch of runs — and, through the remote engine, a whole batch of teacher-labelled telemetry.
- */
-function parseSeedsEnd(raw: string | null): number | null {
-  if (!raw) return null;
-  const m = /^(\d+)-(\d+)$/.exec(raw.trim());
-  if (!m) return null;
-  const end = Number(m[2]);
-  return Number.isFinite(end) ? end >>> 0 : null;
-}
 
 // ---------------------------------------------------------------- run state (what the HUD shows)
 
@@ -141,6 +127,8 @@ export interface RunState {
   lateral: number;
   collisions: number;
   nearMisses: number;
+  /** collisions whose obstacle was a thrown rock (a subset of `collisions`) */
+  rockHits: number;
   bestDistance: number;
   frame: SensorFrame | null;
   raysVisible: boolean;
@@ -258,7 +246,7 @@ async function main(): Promise<void> {
   let difficulty = cfg.difficulty;
   const newSpawner = () => createSpawner(createRng(cfg.seed), factories, { level: difficulty });
 
-  const world = createWorld({ root: appRoot, seed: cfg.seed, spawner: newSpawner(), bounds });
+  const world = createWorld({ root: appRoot, seed: cfg.seed, spawner: newSpawner(), bounds, difficulty });
   const drone = createDrone(world.scene);
   world.follow(drone);
   const rig = createChaseRig(world.camera, drone);
@@ -315,6 +303,7 @@ async function main(): Promise<void> {
   let bestDistance = 0;
   let paused = false;
   let stopRequested = false;
+  let rockHits = 0;
   let resetAt: number | null = null;
   let decisionClock = 0;
   let lastAction: ActionName | null = null;
@@ -355,6 +344,7 @@ async function main(): Promise<void> {
 
   const onCollision = (kind: GameEvent['obstacle_kind']): void => {
     collisions += 1;
+    if (kind === 'projectile') rockHits += 1;
     world.flash();
     hud.flash('collision');
     event('collision', { obstacle_kind: kind ?? null, details: { distance_m: distance(), episode } });
@@ -402,6 +392,7 @@ async function main(): Promise<void> {
     lateral: drone.position.x,
     collisions,
     nearMisses,
+    rockHits,
     bestDistance,
     frame: sensors.lastFrame(),
     raysVisible: rays.isVisible(),
@@ -507,13 +498,14 @@ async function main(): Promise<void> {
     arenaResult = result;
     hud.showArena(result);
     resolveArena(result);
-    if (cfg.seedsEnd !== null && cfg.seed < cfg.seedsEnd) {
-      const next = new URLSearchParams(window.location.search);
-      next.set('seed', String(cfg.seed + 1));
-      console.log(`ARENA_CHAIN next seed ${cfg.seed + 1} of ${cfg.seedsEnd}`);
-      setTimeout(() => { window.location.search = next.toString(); }, 400);
+    const next = nextMatrixUrl(window.location.search);
+    if (next !== null) {
+      const p = matrixProgress(window.location.search);
+      console.log(`ARENA_CHAIN ${p.index}/${p.total} done, next ?${next}`);
+      setTimeout(() => { window.location.search = next; }, 400);
       return;
     }
+    console.log('ARENA_MATRIX_DONE');
     // keep drawing the final state so the run stays inspectable
     const idle = (): void => {
       render();
@@ -532,6 +524,7 @@ async function main(): Promise<void> {
   hud.onDifficultyChange((level: number) => {
     if (cfg.arena) return; // arena runs are fixed by their URL so results stay comparable
     difficulty = level;
+    world.setDifficulty(level);
     event('reset', { details: { reason: 'difficulty', difficulty: level } });
     scoreAndReset('manual');
   });

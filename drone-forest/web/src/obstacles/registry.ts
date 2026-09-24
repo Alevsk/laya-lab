@@ -8,7 +8,7 @@
  */
 import type { ObstacleFactory } from '../core/types';
 import { DEFAULT_CORRIDOR, type CorridorFrame } from './corridor';
-import { BirdFactory, RockFactory, TreeFactory, type FactoryOptions } from './factories';
+import { BirdFactory, OgreFactory, RockFactory, TreeFactory, type FactoryOptions } from './factories';
 
 export type FactoryProvider = (options: Required<FactoryOptions>) => ObstacleFactory;
 
@@ -43,3 +43,4 @@ export function disposeFactories(factories: readonly ObstacleFactory[]): void {
 registerFactory((o) => new TreeFactory(o));
 registerFactory((o) => new RockFactory(o));
 registerFactory((o) => new BirdFactory(o));
+registerFactory((o) => new OgreFactory(o));

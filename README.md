@@ -459,7 +459,22 @@ engine-recommended `target_speed` in the protocol (the same seed went from 546 m
 45 s once the heuristic could choose its speed), a chained-seed arena that collects thousands
 of teacher-labelled frames per minute, and a fine-tune loop (`make finetune`) that trains
 Laya on that telemetry and serves the result as the `laya-ft` engine. Whether the fine-tune
-makes it fly is reported honestly in that folder's README as the runs complete.
+makes it fly is reported honestly in that folder's README as the runs complete. The latest
+addition is a hostile creature — ogres that throw rocks at the drone, scaling with difficulty —
+added entirely through the obstacle seam; the fine-tuned Laya is hit by their rocks and by
+nothing else, which is the next thing to teach it.
+
+The question the simulator exists to answer — *how good and how fast is Laya as the drone's
+decision engine?* — has a repeatable protocol: `make evaluate` prints one URL that runs every
+engine × difficulty level × seed in both arena modes (quality mode removes latency and
+measures the policy; realtime mode keeps the wall clock and measures whether the engine keeps
+up at 10 Hz), and `make scoreboard` turns the recorded results into one table of collisions
+per run, rock hits, near-misses, distance, chosen speed, ticks met and think latency. The
+scoreboards and what they say are in that folder's README under *Evaluation protocol*. As of
+the third fine-tune (v3, trained on 80k frames that include the ogres): Laya flies every run
+at 13–14 m/s with 1–2.5 collisions per 45 s against the teacher's 0 and random's 3.5–9, and
+decides in ~85–125 ms per frame on an M4 Max — usable, at the edge of a 10 Hz loop, and not
+yet safe.
 
 ---
 

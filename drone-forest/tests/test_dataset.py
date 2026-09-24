@@ -92,3 +92,24 @@ def test_ft_engine_is_registered_and_points_at_a_checkpoint_dir():
     d = eng.describe()
     assert d["fine_tuned"] is True and d["engine"] == "laya-ft"
     assert isinstance(Decision, type)
+
+
+def test_cap_val_keeps_rock_dodges_first():
+    from conftest import make_frame
+
+    from server.dataset import Example
+    from server.finetune import cap_val
+    from server.schemas import Action, Nearest
+
+    rock = Nearest(kind="projectile", distance=6.0, bearing_deg=5.0, elevation_deg=-20.0, closing_speed=14.0)
+
+    def ex(teacher, threat=None):
+        return Example(make_frame(threat=threat), teacher, {teacher.value: 1.0}, 0.0, 0.0, "heuristic", "f")
+
+    val = [ex(Action.FORWARD) for _ in range(50)] + [ex(Action.BANK_LEFT) for _ in range(20)] \
+        + [ex(Action.CLIMB, rock) for _ in range(5)]
+    picked = cap_val(val, 30)
+    assert len(picked) == 30
+    assert sum(1 for e in picked if e.frame.threat is not None) == 5          # every rock-dodge frame kept
+    assert sum(1 for e in picked if e.teacher is Action.BANK_LEFT) == 10      # a third for other danger
+    assert sum(1 for e in picked if e.teacher is Action.FORWARD) == 15        # forward fills the rest

@@ -33,6 +33,7 @@ export interface HudState {
   distance: number;
   collisions: number;
   nearMisses: number;
+  rockHits?: number;
   bestDistance?: number;
   /** the latest sensor frame, for altitude / speed / nearest; `altitude` and `speed` may be given directly instead */
   frame?: SensorFrame | null;
@@ -200,7 +201,11 @@ export function createHud(root: HTMLElement, opts: HudOptions = {}): Hud {
   const rSpeed = row(flight, 'speed');
   const rTarget = row(flight, 'target speed');
   const rNearest = row(flight, 'nearest');
+  const rThreat = row(flight, 'incoming');
+  rThreat.root.classList.add('bad');
+  rThreat.root.hidden = true;
   const rDist = row(flight, 'distance');
+  const rRocks = row(flight, 'rock hits');
   const rBest = row(flight, 'best');
   const rColl = row(flight, 'collisions');
   const rNear = row(flight, 'near-misses');
@@ -307,7 +312,11 @@ export function createHud(root: HTMLElement, opts: HudOptions = {}): Hud {
     rNearest.v.textContent = f?.nearest
       ? `${f.nearest.kind} ${f.nearest.distance.toFixed(1)}m @${f.nearest.bearing_deg.toFixed(0)}°${f.nearest.closing_speed > 0.5 ? ' closing' : ''}`
       : '–';
+    const th = s.frame?.threat ?? null;
+    rThreat.root.hidden = !th;
+    if (th) rThreat.v.textContent = `${th.kind} ${th.distance.toFixed(1)}m @${th.bearing_deg.toFixed(0)}° ${th.elevation_deg < -8 ? 'below' : th.elevation_deg > 8 ? 'above' : 'level'} · ${th.closing_speed.toFixed(0)} m/s`;
     rDist.v.textContent = `${s.distance.toFixed(0)} m`;
+    rRocks.v.textContent = String(s.rockHits ?? 0);
     rBest.root.hidden = s.bestDistance === undefined;
     rBest.v.textContent = s.bestDistance !== undefined ? `${s.bestDistance.toFixed(0)} m` : '–';
     rColl.v.textContent = String(s.collisions);

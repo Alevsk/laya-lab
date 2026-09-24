@@ -69,6 +69,8 @@ SPEED_NEAR_M = 8.0
 """Metres of clearance ahead at which the drone is held to SPEED_MIN."""
 TTC_TARGET_S = 2.5
 """Seconds of time-to-collision the chosen speed must preserve toward whatever is ahead."""
+DODGE_TTC_S = 2.0
+"""Seconds; a fast-closing threat inside this window shifts the scores toward the escape direction."""
 
 
 def _clamp(x: float, lo: float = 0.0, hi: float = 1.0) -> float:
@@ -157,6 +159,24 @@ class HeuristicEngine:
         if nearest is not None and nearest.closing_speed > 0 and abs(nearest.bearing_deg) <= FRONT_CONE_DEG:
             ttc_nearest = nearest.distance / nearest.closing_speed
             scores[Action.FORWARD] *= _clamp(ttc_nearest / 3.0, 0.3, 1.0)
+        # A thrown rock is coming (`frame.threat` is the most urgent MOVING object; scenery never
+        # appears there): dodge away from it - up if it comes from below, sideways away from its
+        # bearing - and stop rewarding straight flight into it.
+        incoming = frame.threat
+        if (incoming is not None and incoming.kind == "projectile" and incoming.closing_speed > 0
+                and abs(incoming.bearing_deg) <= 60):
+            ttc = incoming.distance / incoming.closing_speed
+            if ttc < DODGE_TTC_S:
+                threat = _clamp(1.0 - ttc / DODGE_TTC_S)
+                if incoming.elevation_deg < -8:
+                    scores[Action.CLIMB] *= 1.0 + 1.2 * threat
+                elif incoming.elevation_deg > 8:
+                    scores[Action.DESCEND] *= 1.0 + 1.2 * threat
+                if incoming.bearing_deg <= 0:
+                    scores[Action.BANK_RIGHT] *= 1.0 + 0.8 * threat
+                else:
+                    scores[Action.BANK_LEFT] *= 1.0 + 0.8 * threat
+                scores[Action.FORWARD] *= 1.0 - 0.6 * threat
 
         # Brake wants everything ahead close and speed still worth shedding; a hovering drone
         # that keeps braking never leaves the box, so at low speed the climb/bank take over.

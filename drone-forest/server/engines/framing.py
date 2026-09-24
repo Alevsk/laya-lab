@@ -69,6 +69,8 @@ OBSTACLE_NOUN: dict[str, str] = {
     "tree": "a tree",
     "rock": "a rock",
     "bird": "a bird",
+    "ogre": "an ogre",
+    "projectile": "a thrown rock",
     "ground": "the ground",
     "wall": "a wall",
 }
@@ -182,6 +184,13 @@ def render_state_semantic(frame: SensorFrame) -> str:
         lines.append(
             f"Nearest obstacle: {OBSTACLE_NOUN.get(n.kind, n.kind)}, {distance_word(n.distance)}, "
             f"{bearing_words(n.bearing_deg, n.elevation_deg)}{closing}."
+        )
+    if frame.threat is not None:
+        t = frame.threat
+        vertical = " from below" if t.elevation_deg < -8 else " from above" if t.elevation_deg > 8 else ""
+        lines.append(
+            f"Incoming: {OBSTACLE_NOUN.get(t.kind, t.kind)}, {distance_word(t.distance)}, "
+            f"{bearing_words(t.bearing_deg, 0.0)}{vertical}, closing fast."
         )
     if frame.last_action is not None:
         lines.append(f"Last action: {frame.last_action.value.replace('_', ' ')}.")

@@ -189,6 +189,23 @@ export function castFan(
  * Ground and ceiling are deliberately not candidates: the 'down'/'up' rays and the frame's
  * altitude + bounds already carry them, and letting the floor win here would hide the tree.
  */
+function relativeClosing(dx: number, dy: number, dz: number, len: number, s: SphereLike, droneVelocity: Vec3): number {
+  if (len <= 1e-9) return 0;
+  const ov = s.velocity ?? { x: 0, y: 0, z: 0 };
+  // d/dt |c - p| = unit(c - p) · (v_obstacle - v_drone); the gap shrinks when that is negative
+  return -(dx * (ov.x - droneVelocity.x) + dy * (ov.y - droneVelocity.y) + dz * (ov.z - droneVelocity.z)) / len;
+}
+
+function describe(best: SphereLike, bdx: number, bdy: number, bdz: number, gap: number, closing: number, basis: Basis): Nearest {
+  const horiz = Math.sqrt(bdx * bdx + bdz * bdz);
+  const along = bdx * basis.forward.x + bdy * basis.forward.y + bdz * basis.forward.z;
+  const across = bdx * basis.right.x + bdy * basis.right.y + bdz * basis.right.z;
+  const bearing = horiz < 1e-9 ? 0 : Math.atan2(across, along) * RAD;
+  const elevation = Math.atan2(bdy, horiz) * RAD;
+  return { kind: best.kind, distance: Math.max(0, gap), bearing_deg: bearing, elevation_deg: elevation, closing_speed: closing };
+}
+
+/** The closest obstacle by surface gap - scenery proximity, whatever it is doing. */
 export function nearestObstacle(
   origin: Vec3,
   droneVelocity: Vec3,
@@ -217,28 +234,51 @@ export function nearestObstacle(
     }
   }
   if (!best) return null;
+  return describe(best, bdx, bdy, bdz, bestGap, relativeClosing(bdx, bdy, bdz, bLen, best, droneVelocity), basis);
+}
 
-  const horiz = Math.sqrt(bdx * bdx + bdz * bdz);
-  const along = bdx * basis.forward.x + bdy * basis.forward.y + bdz * basis.forward.z;
-  const across = bdx * basis.right.x + bdy * basis.right.y + bdz * basis.right.z;
-  const bearing = horiz < 1e-9 ? 0 : Math.atan2(across, along) * RAD;
-  const elevation = Math.atan2(bdy, horiz) * RAD;
+/** Seconds of time-to-collision beyond which a moving object is not reported as a threat. */
+export const THREAT_TTC_S = 4;
 
-  let closing = 0;
-  if (bLen > 1e-9) {
-    const ov = best.velocity ?? { x: 0, y: 0, z: 0 };
-    const rvx = ov.x - droneVelocity.x;
-    const rvy = ov.y - droneVelocity.y;
-    const rvz = ov.z - droneVelocity.z;
-    // d/dt |c - p| = unit(c - p) · (v_obstacle - v_drone); the gap shrinks when that is negative
-    closing = -(bdx * rvx + bdy * rvy + bdz * rvz) / bLen;
+/**
+ * The most urgent MOVING object: among obstacles with their own velocity (thrown rocks, birds),
+ * the one with the least time-to-collision (gap / closing speed), provided it is closing and
+ * would arrive within THREAT_TTC_S. Static scenery never appears here - that is `nearest`.
+ */
+export function mostUrgentThreat(
+  origin: Vec3,
+  droneVelocity: Vec3,
+  basis: Basis,
+  spheres: readonly SphereLike[],
+): Nearest | null {
+  let best: SphereLike | null = null;
+  let bestTtc = THREAT_TTC_S;
+  let bdx = 0;
+  let bdy = 0;
+  let bdz = 0;
+  let bGap = 0;
+  let bClosing = 0;
+  for (const s of spheres) {
+    const ov = s.velocity;
+    if (!ov || (ov.x === 0 && ov.y === 0 && ov.z === 0)) continue;
+    const dx = s.position.x - origin.x;
+    const dy = s.position.y - origin.y;
+    const dz = s.position.z - origin.z;
+    const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    const closing = relativeClosing(dx, dy, dz, len, s, droneVelocity);
+    if (closing <= 0) continue;
+    const gap = Math.max(0, len - s.radius);
+    const ttc = gap / closing;
+    if (ttc < bestTtc) {
+      bestTtc = ttc;
+      best = s;
+      bdx = dx;
+      bdy = dy;
+      bdz = dz;
+      bGap = gap;
+      bClosing = closing;
+    }
   }
-
-  return {
-    kind: best.kind,
-    distance: Math.max(0, bestGap),
-    bearing_deg: bearing,
-    elevation_deg: elevation,
-    closing_speed: closing,
-  };
+  if (!best) return null;
+  return describe(best, bdx, bdy, bdz, bGap, bClosing, basis);
 }

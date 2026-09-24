@@ -10,7 +10,7 @@
  */
 import type * as THREE from 'three';
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 4;
 
 /** m/s: the slowest an engine may ask the drone to fly. Mirrors server/schemas.py::SPEED_MIN. */
 export const SPEED_MIN = 4;
@@ -20,7 +20,7 @@ export const SPEED_MIN = 4;
 export const ACTIONS = ['forward', 'bank_left', 'bank_right', 'climb', 'descend', 'brake'] as const;
 export type ActionName = (typeof ACTIONS)[number];
 
-export type ObstacleKind = 'tree' | 'rock' | 'bird' | 'ground' | 'wall';
+export type ObstacleKind = 'tree' | 'rock' | 'bird' | 'ogre' | 'projectile' | 'ground' | 'wall';
 
 export interface Vec3 { x: number; y: number; z: number }
 
@@ -59,6 +59,8 @@ export interface SensorFrame {
   drone: DroneState;
   rays: Ray[];               // exactly RAY_SPEC, in order
   nearest: Nearest | null;
+  /** most urgent MOVING object (rock, bird): least time-to-collision within 4 s; null when nothing is coming */
+  threat: Nearest | null;
   bounds: Bounds;
   last_action: ActionName | null;
 }
@@ -126,6 +128,10 @@ export interface WorldContext {
   rng: Rng;
   bounds: Bounds & { half_width: number; corridor_length: number };
   drone: { position: THREE.Vector3; velocity: THREE.Vector3; heading_deg: number };
+  /** the difficulty preset in effect (1..5), so behaviours can scale with it live */
+  difficulty: number;
+  /** put an obstacle a behaviour created mid-flight (a thrown rock) into the world */
+  emit(obstacle: Obstacle): void;
 }
 
 /** A policy that moves an obstacle. Static trees use `StaticBehavior`; birds use `RandomWander`; a future AI policy plugs in here. */
